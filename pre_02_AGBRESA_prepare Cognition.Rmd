@@ -1,0 +1,91 @@
+---
+title: "AGBRESA Cognition Data Harvesting Scripts"
+author: "A Stahn"
+date: "10/25/2021"
+output: html_document
+---
+
+# Prepare Script
+## Required Packages
+```{r load required packages, message = FALSE}
+library(data.table)   # rbindlist
+library(purrr)   # harvest data func
+library(stringr) # harvest data func
+library(dplyr)  # harvest data func
+library(plyr)
+library(tidyverse)
+library(grDevices) # check outliers based on IQR
+library(openxlsx) # save tables
+library(readxl)
+```
+## Print Session Info
+```{r print R and package versions}
+print(sessionInfo())
+```
+# Load Data
+```{r Cognition}
+# read data
+df_cognition <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Cognition/AGBRESA Cognition Data Matrices.xlsx", sheet = "Matrix_AGBRESA_C_S")
+df_cognition <- df_cognition[c("ID", 
+                               "Battery",
+                               "MP_AvRT","MP_Accuracy",
+                               "VOLT_AvRT", "VOLT_pCorr",
+                               "NBCK_AvRT",  "NBCK_Av_pCorr", 
+                               "AM_AvRT", "AM_pCorr",
+                               "LOT_AvRT", "LOT_Accuracy",
+                               "ERT_AvRT", "ERT_pCorr",
+                               "MRT_AvRT", "MRT_pCorr",
+                               "DSST_AvRT", "DSST_pCorr",
+                               "BART_AvRT", "BART_RiskScoreP",
+                               "PVT_Slowness","PVT_Accuracy")]
+
+df_cognition[c(1,2)] <- lapply(df_cognition[c(1,2)], factor)
+
+df_cognition$time.f <- revalue(df_cognition$Battery, c( "1" = "BDC-13",
+                                                        "2" = "BDC-11",
+                                                        "3" = "BDC-9",
+                                                        "4" = "BDC-7",
+                                                        "5" = "BDC-6", 
+                                                        "6" = "HDT1", 
+                                                        "7" = "HDT3", 
+                                                        "8" = "HDT5", 
+                                                        "9" = "HDT14",
+                                                        "10" = "HDT28",
+                                                        "11" = "HDT42",
+                                                        "12" = "HDT57",
+                                                        "13" = "R+1",
+                                                        "14" = "R+5",
+                                                        "15" = "R+12")) #relabel time.f
+
+df_cognition[c(2)] <- lapply(df_cognition[c(2)], as.numeric)
+df_cognition <- subset(df_cognition, Battery > 2)
+names(df_cognition)
+df_cognition <- df_cognition[c(1,2,23,3:22)]
+
+tmp <- ddply(df_cognition, c("ID", "Battery", "time.f"), summarise,
+                MP_Eff = (MP_AvRT + MP_Accuracy)/2,
+                VOLT_Eff =(VOLT_AvRT + VOLT_pCorr)/2,
+                NBACK_Eff =(NBCK_AvRT + NBCK_Av_pCorr)/2,
+                AM_Eff =(AM_AvRT + AM_pCorr)/2,
+                LOT_Eff =(LOT_AvRT + LOT_Accuracy)/2,
+                ERT_Eff =(ERT_AvRT + ERT_pCorr)/2,
+                MRT_Eff =(MRT_AvRT + MRT_pCorr)/2,
+                DSST_Eff =(DSST_AvRT + DSST_pCorr)/2,
+                BART_Eff =(BART_AvRT + BART_RiskScoreP)/2,
+                PVT_Eff =(PVT_Slowness + PVT_Accuracy)/2
+                )
+                
+df_cognition <- merge(df_cognition, tmp, by = c("ID", "Battery", "time.f"))            
+
+# clean id
+colnames(df_cognition)[1] <- "id"
+df_cognition$id <- gsub("AGB_", "", df_cognition$id) #clean
+df_cognition[c(1:3)] <- lapply(df_cognition[c(1:3)], as.factor)
+df_cognition <- as_tibble(df_cognition)
+```
+# Write to Excel File
+```{r export}
+list_of_datasets <- list( "Data Cognition" = df_cognition)
+write.xlsx(list_of_datasets, file = "./Data/Data Cognition.xlsx", overwrite = TRUE)
+```
+

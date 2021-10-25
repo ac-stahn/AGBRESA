@@ -1,0 +1,254 @@
+---
+title: "AGBRESA Preprocess Biomarker"
+author: "A Stahn"
+date: "10/25/2021"
+output: html_document
+---
+# Prepare Script
+## Required Packages
+```{r load required packages, message = FALSE}
+library(readxl)#read xls
+library(openxlsx) #save tables
+library(plyr) #means across subjects and groups, change scores
+library(dplyr) #distinct function
+library(tidyverse)
+```
+## Print Session Info
+```{r print R and package versions}
+print(sessionInfo())
+```
+## Functions
+```{r function for preprocessing}
+# Preprocessing function blood
+func_clean_var <- function(x){
+  x$time.f <- x$file
+  x$time.f <- gsub("AGBR-", "", x$time.f)
+  x$time.f <- gsub( "-AS.*$", "", x$time.f ) #extract everythign after -AS from start
+  x$time.f <- gsub('(.*)-\\w+', '\\1', x$time.f) #delete everyhting after last underscore
+  x$id <- x$file
+  x$id <- gsub("AGBR-", "", x$id)
+  x$id <- gsub( "-AS.*$", "", x$id )
+  x$id <- gsub(".*-","",x$id)
+  x$tod <- x$file
+  x$tod <- gsub("AGBR-", "", x$tod)
+  x$tod <- gsub(".{3}$", "", x$tod)
+  x$tod  <- gsub( "^*.-", "", x$tod  ) #delete everything before _
+  x$tod  <- gsub(".*-","",x$tod)
+  x$tod  <- gsub("AS","1",x$tod)
+  x <- x[-c(1)]
+  return(x)
+}
+
+# Preprocessing function cortisol
+func_clean_var_cort <- function(x){
+  x$time.f <- x$file
+  x$time.f <- gsub("AGBR-", "", x$time.f)
+  x$time.f <- gsub( "-AS.*$", "", x$time.f ) #extract everythign after -AS from start
+  x$time.f <- gsub('(.*)-\\w+', '\\1', x$time.f) #delete everyhting after last underscore
+  x$id <- x$file
+  x$id <- gsub("AGBR-", "", x$id)
+  x$id <- gsub( "-AS.*$", "", x$id )
+  x$id <- gsub(".*-","",x$id)
+  x$tod <- x$file
+  x$tod <- gsub("AGBR-", "", x$tod)
+  x$tod <- gsub("-Sal", "", x$tod)
+  x$tod  <- gsub( "^*.-", "", x$tod  ) #delete everything before _
+  x$tod  <- gsub(".*-","",x$tod)
+  x$tod  <- gsub("AS","1",x$tod)
+  x <- x[-c(1)]
+  return(x)
+}
+
+# Helper function for bdc mean and sd, forward to 'func_z'
+func_bdc <- function(x) (x %>%
+  filter(!!!bdc) %>% # requires input as cat
+  group_by(variable) %>%
+  dplyr::summarize(
+    mean_bdc = mean(value, na.rm=T),
+    sd_bdc = sd(value, na.rm=T)
+    )
+  )
+
+# Function for z scores, requires 'func_bdc'
+func_z <- function(x) {
+  tmp <- reshape2::melt(x, id.vars = id_vars) 
+  dat_bdc <- func_bdc(tmp)
+  tmp <- merge(tmp, dat_bdc, by ="variable")
+  tmp$z <- (tmp$value - tmp$mean_bdc) / tmp$sd_bdc
+  tmp$variable <- paste(tmp$variable, "z", sep="_")
+  tmp_id_var <- paste(id_vars, collapse = "+")
+  id_vars_dep <- paste(tmp_id_var, "~ variable" )
+  tmp <- reshape2::dcast(tmp, id_vars_dep, value.var = "z")
+  return(tmp)
+}
+```
+
+# Load and Preprocess Data
+```{r biomarker}
+# Read data
+# Data bdnf
+df_bdnf <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Biomarker/TCL/BDNF data.xlsx", sheet = 1)
+df_bdnf <- df_bdnf[c(2:5)]
+df_bdnf <- df_bdnf[-c(1:2,78:81,154:157,232:235),]
+names(df_bdnf)[names(df_bdnf)=="...2"] <- "file"
+names(df_bdnf)[names(df_bdnf)=="BDNF"] <- "bdnf"
+names(df_bdnf)[names(df_bdnf)=="...4"] <- "cv_bdnf"
+names(df_bdnf)[names(df_bdnf)=="...5"] <- "comment_bdnf"
+
+# Preprocess and clean data
+df_tmp <- df_bdnf
+df_bdnf <- func_clean_var(df_tmp)
+
+# Data igf
+df_igf <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Biomarker/TCL/Stahn IGF-1 Raw Data 052721.xlsx", sheet = 1)
+df_igf <- df_igf[c(2,9)]
+df_igf <- df_igf[-c(1:2),]
+names(df_igf)[names(df_igf)=="...2"] <- "file"
+names(df_igf)[names(df_igf)=="...9"] <- "igf"
+
+# Preprocess and clean data
+df_tmp <- df_igf
+df_igf <- func_clean_var(df_igf)
+
+# Data vegf
+df_vegf <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Biomarker/TCL/VEGF-A data.xlsx", sheet = 1)
+df_vegf <- df_vegf[c(2:5)]
+df_vegf <- df_vegf[-c(1:2,78:81,154:157,232:235),]
+names(df_vegf)[names(df_vegf)=="...2"] <- "file"
+names(df_vegf)[names(df_vegf)=="VEGF-A"] <- "vegf"
+names(df_vegf)[names(df_vegf)=="...4"] <- "cv_vegf"
+names(df_vegf)[names(df_vegf)=="...5"] <- "comment_vegf"
+
+# Preprocess and clean data
+df_tmp <- df_vegf
+df_vegf <- func_clean_var(df_vegf)
+
+# Data il1b
+df_il1b <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Biomarker/TCL/il1b Data Report.xlsx", sheet = 1)
+df_il1b <- df_il1b[c(2:5)]
+df_il1b <- df_il1b[-c(1:2,78:81,154:157,232:235),]
+names(df_il1b)[names(df_il1b)=="...2"] <- "file"
+names(df_il1b)[names(df_il1b)=="IL1b"] <- "il1b"
+names(df_il1b)[names(df_il1b)=="...4"] <- "cv_il1b"
+names(df_il1b)[names(df_il1b)=="...5"] <- "comment_il1b"
+df_il1b$il1b <- gsub("[*]","",df_il1b$il1b) #remove asterisk
+
+# Preprocess and clean data
+df_tmp <- df_il1b
+df_il1b <- func_clean_var(df_il1b)
+
+
+# Data il6
+df_il6 <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Biomarker/TCL/IL6 Data Report.xlsx", sheet = 1)
+df_il6 <- df_il6[c(2:5)]
+df_il6 <- df_il6[-c(1:2,78:81,154:157,232:235),]
+names(df_il6)[names(df_il6)=="...2"] <- "file"
+names(df_il6)[names(df_il6)=="IL-6"] <- "il6"
+names(df_il6)[names(df_il6)=="...4"] <- "cv_il6"
+names(df_il6)[names(df_il6)=="...5"] <- "comment_il16"
+df_il6$il6 <- gsub("[*]","",df_il6$il6) #remove asterisk
+
+# Preprocess and clean data
+df_tmp <- df_il6
+df_il6 <- func_clean_var(df_il6)
+
+# Data tnfa
+df_tnfa <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Biomarker/TCL/TNF Report.xlsx", sheet = 1)
+df_tnfa <- df_tnfa[c(2:5)]
+df_tnfa <- df_tnfa[-c(1:2,78:81,154:157,232:235),]
+names(df_tnfa)[names(df_tnfa)=="...2"] <- "file"
+names(df_tnfa)[names(df_tnfa)=="TNF-a"] <- "tnfa"
+names(df_tnfa)[names(df_tnfa)=="...4"] <- "cv_tnfa"
+names(df_tnfa)[names(df_tnfa)=="...5"] <- "comment_tnfa"
+df_tnfa$tnfa <- gsub("[*]","",df_tnfa$tnfa) #remove asterisk
+
+# Preprocess and clean data
+df_tmp <- df_tnfa
+df_tnfa <- func_clean_var(df_tnfa)
+
+# Data nfl
+df_nfl <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Biomarker/TCL/NFL Report.xlsx", sheet = 1)
+df_nfl <- df_nfl[c(2:5)]
+df_nfl <- df_nfl[-c(1:2,78:81,154:157,232:235),]
+names(df_nfl)[names(df_nfl)=="...2"] <- "file"
+names(df_nfl)[names(df_nfl)=="Human NF-L"] <- "nfl"
+names(df_nfl)[names(df_nfl)=="...4"] <- "cv_nfl"
+names(df_nfl)[names(df_nfl)=="...5"] <- "comment_nfl"
+df_nfl$nfl <- gsub("[*]","",df_nfl$nfl) #remove asterisk
+
+# preprocess and clean data
+df_tmp <- df_nfl
+df_nfl <- func_clean_var(df_nfl)
+
+# Data cortisol
+df_cort <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Biomarker/TCL/Stahn Cortisol Raw Data 052721_cor.xlsx", sheet = 1)
+df_cort <- df_cort[c(2,9)]
+df_cort <- df_cort[-c(1:2),]
+names(df_cort)[names(df_cort)=="...2"] <- "file"
+names(df_cort)[names(df_cort)=="...9"] <- "cort"
+
+#df_cort <- df_cort[-c(299),] #delete double entry
+# preprocess and clean data
+df_tmp <- df_cort
+df_cort <- func_clean_var_cort(df_cort)
+
+# Rearrange columns
+df_cort <- df_cort[c(3,2,4,1)]
+
+
+df_cort <- as_tibble(df_cort)
+
+# Convert var types
+df_cort[c(1:3)] <- lapply(df_cort[c(1:3)], as.factor)
+df_cort[c(4)] <- lapply(df_cort[c(4)], as.numeric)
+
+```
+# Combine
+```{r combine dfs}
+df_bio_tmp <- merge(df_bdnf, df_igf, by=c("id","time.f","tod"))
+df_bio_tmp <- merge(df_bio_tmp, df_vegf, by=c("id","time.f","tod"))
+df_bio_tmp <- merge(df_bio_tmp, df_nfl, by=c("id","time.f","tod"))
+df_bio_tmp <- merge(df_bio_tmp, df_il1b, by=c("id","time.f","tod"))
+df_bio_tmp <- merge(df_bio_tmp, df_il6, by=c("id","time.f","tod"))
+df_blood <- merge(df_bio_tmp, df_tnfa, by=c("id","time.f","tod"))
+df_blood <- as_tibble(df_blood)
+```
+# Add z scores
+```{r z scores}
+# blood
+df_blood_z <- df_blood[c(1:4,7,8,11,14,17,20)]
+
+# Convert var type
+df_blood_z[c(1:3)] <- lapply(df_blood_z[c(1:3)], as.factor)
+df_blood_z[c(4:10)] <- lapply(df_blood_z[c(4:10)], as.numeric)
+df_blood_z <- as_tibble(df_blood_z)
+
+# Define id vars for long format, and bdc data
+id_vars <- c('id', 'time.f', 'tod')
+bdc <- quote( time.f == "BDC-6" | time.f == "BDC-3" )
+
+# Run z scores
+df_blood_z <- func_z(df_blood_z)
+df_blood_z <- as_tibble(df_blood_z)
+
+# cortisol
+df_cort_z <- df_cort
+
+# define id vars for long format, and bdc data
+id_vars <- c('id', 'time.f', 'tod')
+bdc <- quote( time.f == "BDC-6" | time.f == "BDC-3" )
+
+# Run z scores
+df_cort_z <- func_z(df_cort_z)
+
+df_cort_z <- as_tibble(df_cort_z)
+```
+
+# Save data
+```{r export data}
+list_of_datasets <- list("Data Cortisol" = df_cort,
+                         "Data Cortisol z score" = df_cort_z,
+                         "Data Blood" = df_blood,
+                         "Data Blood z score" = df_blood_z)
+write.xlsx(list_of_datasets, file = "./Data/Data Biomarker.xlsx", overwrite = TRUE)
+```

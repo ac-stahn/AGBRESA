@@ -1,0 +1,936 @@
+---
+title: "AGBRESA Spatial Cognition Data Harvesting Scripts"
+author: "A Stahn"
+date: "10/25/2021"
+output: html_document
+---
+
+# Prepare Script
+## Required Packages
+```{r load required packages, message = FALSE}
+library(data.table) # rbindlist
+library(purrr) # harvest data func
+library(stringr) # harvest data func
+library(dplyr) # harvest data func
+library(plyr)
+library(tidyverse)
+library(grDevices) # check outliers based on IQR
+library(EnvStats) # Rosner test for outliers
+library(bpnreg) # circular stats
+library(openxlsx) # save tables
+library(readxl) # open excel
+library(arsenal) # tableby
+```
+## Print Session Info
+```{r print R and package versions}
+print(sessionInfo())
+```
+# Functions
+```{r function for z score}
+# Helper function for bdc mean and sd, forward to 'func_z'
+func_bdc <- function(x) (x %>%
+  filter(time.f == bdc) %>%
+  group_by(variable) %>%
+  dplyr::summarize(
+    mean_bdc = mean(value, na.rm=T),
+    sd_bdc = sd(value, na.rm=T)
+    )
+  )
+
+# Function for z scores, requires 'func_bdc'
+func_z <- function(x) {
+  tmp <- reshape2::melt(x, id.vars = id_vars) 
+  dat_bdc <- func_bdc(tmp)
+  tmp <- merge(tmp, dat_bdc, by ="variable")
+  tmp$z <- (tmp$value - tmp$mean_bdc) / tmp$sd_bdc
+  tmp$variable <- paste(tmp$variable, "z", sep="_")
+  tmp_id_var <- paste(id_vars, collapse = "+")
+  id_vars_dep <- paste(tmp_id_var, "~ variable" )
+  tmp <- reshape2::dcast(tmp, id_vars_dep)
+  return(tmp)
+}
+```
+# Load and Preprocess Data
+## Spatial Cognition 1
+### Spatial Updating Task (SUT)
+```{r SUT}
+# read data
+# pull filenames
+list_of_files <- list.files(path = "/Users/astahn/Publications/AGBRESA/Data/Spatial Cognition/", recursive = TRUE, 
+                            pattern = "sut2(.*)txt",
+                            full.name = TRUE)
+list_of_files <- gsub("//","/", list_of_files) #delete everthing before and up to MTN_DATA/
+
+
+# Read all the files and create a FileName column to store filenames
+library(data.table) #rbindlist
+df_sut <- rbindlist(sapply(list_of_files[-c(27:55)], fread, simplify = FALSE),
+                     use.names = TRUE, idcol = "FileName")
+df_sut <- as.data.frame(df_sut)
+
+# rename columns
+names(df_sut)[names(df_sut)=="V1"] <- "spatial_cognition_id"
+names(df_sut)[names(df_sut)=="V2"] <- "mode"
+names(df_sut)[names(df_sut)=="V3"] <- "num_trial"
+names(df_sut)[names(df_sut)=="V4"] <- "object_1"
+names(df_sut)[names(df_sut)=="V5"] <- "object_1_x"
+names(df_sut)[names(df_sut)=="V6"] <- "object_1_y"
+names(df_sut)[names(df_sut)=="V7"] <- "object_1_z"
+names(df_sut)[names(df_sut)=="V8"] <- "object_2"
+names(df_sut)[names(df_sut)=="V9"] <- "object_2_x"
+names(df_sut)[names(df_sut)=="V10"] <- "object_2_y"
+names(df_sut)[names(df_sut)=="V11"] <- "object_2_z"
+names(df_sut)[names(df_sut)=="V12"] <- "type"
+names(df_sut)[names(df_sut)=="V13"] <- "cond.f"
+names(df_sut)[names(df_sut)=="V14"] <- "actual_length"
+names(df_sut)[names(df_sut)=="V15"] <- "translation_duration"
+names(df_sut)[names(df_sut)=="V16"] <- "correct_angle"
+names(df_sut)[names(df_sut)=="V17"] <- "response_angle"
+names(df_sut)[names(df_sut)=="V18"] <- "rt"
+
+# create time var
+df_sut$time.f <- df_sut$FileName
+df_sut$time.f <- gsub(".*SPATCOG_","", df_sut$time.f) #delete everthing before and up to _
+df_sut$time.f  <- gsub("/SUT_DATA/.*", "", df_sut$time.f ) #keep everthing before and up to /4MTN_DATA/
+df_sut$time.f  <- gsub("-1", "", df_sut$time.f )
+
+# clean
+df_sut <- df_sut[c(2,20,14,4,17:19)]
+
+# compute difference between correct angle and response angle
+# convert data from -180 and +180 to 360
+df_sut$response_angle_corr <- ifelse(df_sut$response_angle<0,df_sut$response_angle+360,df_sut$response_angle)
+
+# compute constant error (signed)
+df_sut$pointing_error_const <- df_sut$correct_angle-df_sut$response_angle_corr
+
+# compute absolute error 
+df_sut$pointing_error_abs <- abs(df_sut$correct_angle-df_sut$response_angle_corr)
+
+# convert data types
+df_sut[c(1:3)] <- lapply(df_sut[c(1:3)], as.factor)
+df_sut[c(4:10)] <- lapply(df_sut[c(4:10)], as.numeric)
+
+# detect outliers
+# check outliers based on IQR
+df_outlier <- df_sut$rt[which(df_sut$rt %in% boxplot.stats(df_sut$rt)$out)]
+length(df_outlier) 
+
+# remove outliers
+df_outlier <- df_sut[-which(df_sut$rt %in% df_outlier),]
+
+# replace df 
+df_sut <- df_outlier
+
+# check outliers based on IQR
+df_outlier <- df_sut$response_angle_corr[which(df_sut$response_angle_corr %in% boxplot.stats(df_sut$response_angle_corr)$out)]
+length(df_outlier) # number for k
+
+df_outlier_pointing_error_const <- df_sut$pointing_error_const[which(df_sut$pointing_error_const %in% boxplot.stats(df_sut$pointing_error_const)$out)]
+
+length(df_outlier_pointing_error_const) # number for k
+
+# Rosner test for outliers
+rosnerTest(df_sut$pointing_error_const, k = 704, warn = F)
+
+# remove outliers
+df_sut_wo_out <- subset(df_sut,pointing_error_const < 161.30993 & pointing_error_const > -161.96376)
+
+# replace df 
+df_sut <- df_sut_wo_out
+
+# basic stats
+length_by_id <- ddply(df_sut, c("spatial_cognition_id"), summarise,
+                     length=length(response_angle_corr))
+
+# compute sd of signed pointing error using circular stats
+df_sut <- ddply(df_sut, c("spatial_cognition_id", "time.f","cond.f"), summarise,
+                  rt=mean(rt),
+                  variable_pointing_error=sd_circ(pointing_error_const, units = "degrees"),
+                  direction=mean_circ(pointing_error_const, units = "degrees")   #The mean direction,θ , is a measure of the mean of the individual angles.
+                )
+                  #https://ncss-wpengine.netdna-ssl.com/wp-content/themes/ncss/pdf/Procedures/NCSS/Circular_Data_Analysis.pdf
+                  #direction_abs=mean_circ(pointing_error_abs, units = "degrees"), 
+                  #response_angle_corr_mean = mean(response_angle_corr),
+                  #response_angle_corr_mean_dir = mean_circ(response_angle_corr,units = "degrees"))
+
+# Compute z scores
+
+# define id vars for long format, and bdc data
+id_vars <- c('spatial_cognition_id', 'time.f', 'cond.f')
+bdc <- c("BDC-3")
+
+# Run z scores
+df_sut_z <- func_z(df_sut)
+
+# Invert so that higher number means better performance
+df_sut_z[c(4:6)] <- df_sut_z[c(4:6)] * -1
+
+# Add efficiency score
+df_sut_z$eff_z <- (df_sut_z$rt_z + df_sut_z$variable_pointing_error_z) / 2
+```
+### Point to Origin task (PTO)
+```{r PTO}
+# read data
+# pull file names
+list_of_files <- list.files(path = "/Users/astahn/Publications/AGBRESA/Data/Spatial_Cognition_org", recursive = TRUE, full.name = TRUE, pattern = "_PTO_(.*)csv") #pull filenames based on (_PTO_*)
+list_of_files <- list_of_files[-grep("TRAJECTORIES", list_of_files, fixed=T)] #drop matlab files
+list_of_files <- list_of_files[-grep("FAM", list_of_files, fixed=T)] #drop familiarization sessions FAM 
+
+# Read all the files and create a FileName column to store filenames
+df_pto <- rbindlist(lapply(list_of_files, fread),
+          use.names = T, idcol = "FileName", fill=T)
+
+df_pto <- as.data.frame(df_pto)
+df_pto <- df_pto[c(2,5:6,8,38,40,42,53,58:69)]
+
+names(df_pto) <- tolower(names(df_pto)) # lower
+df_pto <- subset(df_pto, session != "Demo") # exclude 'Demo'
+df_pto <- droplevels(df_pto)
+
+# rename columns
+names(df_pto)[names(df_pto)=="participant"] <- "spatial_cognition_id" # rename id since spatial cognition used distinct id 
+names(df_pto)[names(df_pto)=="condition"] <- "cond.f" 
+names(df_pto)[names(df_pto)=="session"] <- "time.f" 
+df_pto$time.f <- revalue(df_pto$time.f, c("1" = "BDC-3", "2" = "HDT2", "3" = "HDT30", "4" = "HDT59", "5" = "R+12")) # relabel time.f
+names(df_pto)[names(df_pto)=="homing distance error"] <- "distance_error_signed"
+names(df_pto)[names(df_pto)=="absolute homing distance error"] <- "distance_error_abs"
+names(df_pto)[names(df_pto)=="task difficulty"] <- "rating"
+names(df_pto)[names(df_pto)=="response time"] <- "rt"
+names(df_pto)[names(df_pto)=="signed pointing error"] <- "pe_signed"
+names(df_pto)[names(df_pto)=="signed pointing error for nonturner strategy"] <- "pe_signed_nonturner"
+names(df_pto)[names(df_pto)=="absolute pointing error"] <- "pe_abs"
+names(df_pto)[names(df_pto)=="absolute pointing error for strategy used"] <- "pe_abs_for_strategy_used"
+names(df_pto)[names(df_pto)=="categorization based on pointing error"] <- "categorization_by_pe"
+names(df_pto)[names(df_pto)=="predicted pointing hemisphere (turner)"] <- "pred_pointing_hemisphere_turner"
+names(df_pto)[names(df_pto)=="pointing hemisphere"] <- "pointing_hemisphere"
+names(df_pto)[names(df_pto)=="front-back hemisphere errors"] <- "front_back_hemisphere_errors"
+names(df_pto)[names(df_pto)=="front-back hemisphere errors"] <- "front_back_hemisphere_errors"
+names(df_pto)[names(df_pto)=="overestimation of turning angle wrt turner strategy"] <- "overestimation_turning_angle_wrt_turner_strategy"
+names(df_pto)[names(df_pto)=="overestimation of turning angle wrt nonturner strategy"] <- "overestimation_turning_angle_wrt_nonturner_strategy"
+names(df_pto)[names(df_pto)=="overestimation of turning angle"] <- "overestimation_turning_angle"
+
+# convert data types
+df_pto[c(1:2,4,13:20)] <- lapply(df_pto[c(1:2,4,13:20)], as.factor)
+df_pto[c(3,5:12)] <- lapply(df_pto[c(3,5:12)], as.numeric)
+
+df_pto <- subset(df_pto, cond.f !="1") # drop cond 1
+
+# detect outliers
+# check outliers based on IQR
+df_outlier <- df_pto$rt[which(df_pto$rt %in% boxplot.stats(df_pto$rt)$out)]
+length(df_outlier) 
+
+# remove outliers
+df_outlier <- df_pto[-which(df_pto$rt %in% df_outlier),]
+
+# replace df 
+df_pto <- df_outlier
+
+# compute accuracy and rt
+df_pto <- ddply(df_pto, c("spatial_cognition_id", "time.f","cond.f"), summarise,
+                    rating=mean(rating),
+                    rt=mean(rt),
+                    dist_error=mean(distance_error_abs),
+                    variable_pointing_error=sd_circ(pe_signed, units = "degrees"),
+                    direction=mean_circ(pe_signed, units = "degrees"),   #The mean direction,θ , is a measure of the mean of the individual angles. https://ncss-wpengine.netdna-ssl.com/wp-content/themes/ncss/pdf/Procedures/NCSS/Circular_Data_Analysis.pdf
+                    const_error_std=mean(pe_signed),
+                    abs_error_std=mean(pe_abs),
+                    categorization=length(which(categorization == "Turner"))/12*100,
+                    categorization_by_pe=length(which(categorization_by_pe == "Turner"))/12*100    )
+                                          
+
+# drop unused vars
+df_pto <- df_pto[-c(9:12)]
+
+# Compute z scores
+
+# define id vars for long format, and bdc data
+id_vars <- c("spatial_cognition_id", "time.f", "cond.f")
+bdc <- c("BDC-3")
+
+# Run z scores
+df_pto_z <- func_z(df_pto)
+
+# Invert so that higher number means better performance
+df_pto_z[c(4:6)] <- df_pto_z[c(4:6)] * -1
+
+# Add efficiency score
+df_pto_z$eff_z <- (df_pto_z$rt_z + df_pto_z$variable_pointing_error_z) / 2
+
+# invert so that higher number means better performance
+df_pto_z[c(4:8)] <- df_pto_z[c(4:8)] * -1
+
+# Add efficiency score
+df_pto_z$eff_z <- (df_pto_z$rt_z + df_pto_z$variable_pointing_error_z) / 2
+```
+### Four Mountains task (4MTN)
+```{r 4MTN}
+# read data
+# pull file names
+list_of_files <- list.files(path = "/Users/astahn/Publications/AGBRESA/Data/Spatial Cognition", recursive = TRUE, full.name = TRUE, pattern = "_test_(.*)txt") # pull filenames based on 4MTN nomenclature (*_test_*)
+#list_of_files <- list_of_files[-grep("FAM", list_of_files, fixed=T)] #drop familiarization sessions FAM 
+
+# combine files in df
+df_4mtn <- rbindlist(sapply(list_of_files, fread, simplify = FALSE,skip=8),
+                use.names = TRUE, idcol = "FileName")
+
+# create id
+#df_4mtn <- as.data.frame(df_4mtn)
+df_4mtn$id <- df_4mtn$FileName
+df_4mtn$id <- gsub(".*MTN_DATA/","", df_4mtn$id) # delete everthing before and up to MTN_DATA/
+df_4mtn$id <- gsub("_test.*","", df_4mtn$id) # keep everthing after and up to _test_log.txt
+
+##create time
+df_4mtn$time.f <- df_4mtn$FileName
+df_4mtn$time.f <- gsub(".*SPATCOG_","", df_4mtn$time.f) # delete everthing before and up to _
+df_4mtn$time.f  <- gsub("/4MTN_DATA/.*", "", df_4mtn$time.f ) # keep everything before and up to /4MTN_DATA/
+df_4mtn$time.f <- gsub("*-1","", df_4mtn$time.f ) # delete -1 in HDT59
+
+# rename columns
+df_4mtn <- df_4mtn[,-c(1)] # drop first column
+names(df_4mtn)[names(df_4mtn)=="id"] <- "spatial_cognition_id" # rename id since spatial cognition used distinct id 
+names(df_4mtn)[names(df_4mtn)=="V1"] <- "trial_num" 
+names(df_4mtn)[names(df_4mtn)=="V2"] <- "stim" 
+names(df_4mtn)[names(df_4mtn)=="V3"] <- "response"
+names(df_4mtn)[names(df_4mtn)=="V4"] <- "rt" 
+
+# convert data types
+df_4mtn <- as.data.frame(df_4mtn)
+df_4mtn[c(2:3,5,6)] <- lapply(df_4mtn[c(2:3,5,6)], as.factor)
+df_4mtn[c(1,4)] <- lapply(df_4mtn[c(1,4)], as.numeric)
+
+# detect outliers
+# check outliers based on IQR
+df_outlier <- df_4mtn$rt[which(df_4mtn$rt %in% boxplot.stats(df_4mtn$rt)$out)]
+length(df_outlier) 
+
+# remove outliers
+df_outlier <- df_4mtn[-which(df_4mtn$rt %in% df_outlier),]
+
+# replace df 
+df_4mtn <- df_outlier
+
+# compute accuracy and rt
+df_4mtn <- ddply(df_4mtn, c("spatial_cognition_id", "time.f"), summarise,
+                     acc=length(which(response == "TARGET"))/15*100,
+                     rt=mean(rt))
+
+# Compute z scores
+
+# define id vars for long format, and bdc data
+id_vars <- c("spatial_cognition_id", "time.f")
+bdc <- c("BDC-3")
+
+# Run z scores
+df_4mtn_z <- func_z(df_4mtn)
+
+
+# invert so that higher number means better performance
+df_4mtn_z[c(4)] <- df_4mtn_z[c(4)] * -1
+
+# Add efficiency score
+df_4mtn_z$eff_z <- (df_4mtn_z$rt_z + df_4mtn_z$acc_z) / 2
+```
+### Navigation Search Task 2D
+```{r NAVIS 2D}
+# read data
+
+# pull file names for summary files from NAVIS logs
+list_of_files <- list.files(path = "/Users/astahn/Publications/AGBRESA/Data/Spatial Cognition/R+12", recursive = TRUE, 
+                            pattern = "SUMMARY(.*)csv",
+                            full.name = TRUE) #NOTE: limited to R+12 because it contains the final summary file; 
+# Read all the files and create a FileName column to store filenames
+df_navis_2d <- rbindlist(lapply(list_of_files[c(1,3:6)], fread),
+                     use.names = FALSE, idcol = "FileName")
+df_navis_2d <- as.data.frame(df_navis_2d)
+df_navis_2d <- df_navis_2d[order(df_navis_2d$ID, df_navis_2d$Session),]
+df_navis_2d <- subset(df_navis_2d, ID !="66" & ID !="99" & ID !="15" & ID !="16" & ID !="17")
+nrow(df_navis_2d)
+
+#x <- df_navis_2d %>% 
+##  group_by(ID, Session) %>% 
+ # summarize(n = length(Time))
+
+#nrow(df_navis_2d)
+
+#subset(df_navis_2d, ID=="8")
+#subset(df_navis_2d, ID=="14")
+#subset(df_navis_2d, ID=="20")
+#subset(df_navis_2d, ID=="22")
+#subset(df_navis_2d, ID=="23")
+
+head(df_navis_2d, n=20)
+
+# remove duplicates because if data are pulled from summary files they may contain (redundant) data previously stored
+#df_navis_2d$Time[!duplicated((df_navis_2d$Time))] #show duplicates
+#df_navis_2d<-df_navis_2d[!duplicated(df_navis_2d$Time), ]
+
+df_navis_2d$'Time to ball #1'[!duplicated((df_navis_2d$'Time to ball #1'))] # show duplicates
+df_navis_2d<-df_navis_2d[!duplicated(df_navis_2d$'Time to ball #1'), ]
+
+subset(df_navis_2d, ID=="8")
+subset(df_navis_2d, ID=="14")
+subset(df_navis_2d, ID=="20")
+subset(df_navis_2d, ID=="23")
+
+# clean
+names(df_navis_2d) <- tolower(names(df_navis_2d)) # lower
+names(df_navis_2d) <- gsub(" ", "_", names(df_navis_2d)) # replace spaces
+df_navis_2d <- as.data.frame(df_navis_2d) # as df
+
+##subset(df_navis_2d, id=="22")
+##subset(df_navis_2d, id=="23")
+
+# replace '-1'
+df_navis_2d[c(14,19,24,29,34,39,44,49,15,20,25,30,35,40,45,50)] <- lapply(df_navis_2d[c(14,19,24,29,34,39,44,49,15,20,25,30,35,40,45,50)], gsub, pattern = "-1", replacement = "0")
+df_navis_2d[c(14,19,24,29,34,39,44,49,15,20,25,30,35,40,45,50)] <- lapply(df_navis_2d[c(14,19,24,29,34,39,44,49,15,20,25,30,35,40,45,50)], as.numeric)
+
+# compute summary stats
+df_navis_2d$total_distance <-rowSums(df_navis_2d[c(12,17,22,27,32,37,42,47)])
+df_navis_2d$total_headrotation <-rowSums(df_navis_2d[c(13,18,23,28,33,38,43,48)])
+df_navis_2d$total_targetvisits <-rowSums(df_navis_2d[c(14,19,24,29,34,39,44,49)])
+df_navis_2d$total_revisits <-rowSums(df_navis_2d[c(15,20,25,30,35,40,45,50)])
+
+df_navis_2d <- df_navis_2d[c(4,5,7,8,9,10,52:55,51)]
+
+# rename columns
+names(df_navis_2d)[names(df_navis_2d)=="id"] <- "spatial_cognition_id"
+names(df_navis_2d)[names(df_navis_2d)=="session"] <- "time.f"
+names(df_navis_2d)[names(df_navis_2d)=="mode"] <- "cond.f"
+names(df_navis_2d)[names(df_navis_2d)=="completion_time"] <- "rt"
+names(df_navis_2d)[names(df_navis_2d)=="number_of_balls_collected"] <- "acc"
+
+# convert data types
+df_navis_2d[c(1:3,11)] <- lapply(df_navis_2d[c(1:3,11)], as.factor)
+df_navis_2d[c(4:10)] <- lapply(df_navis_2d[c(4:10)], as.numeric)
+
+#library(dplyr)
+
+#x <- df_navis_2d %>% 
+#  group_by(spatial_cognition_id, time.f) %>% 
+#  summarize(n = length(total_distance))
+#nrow(x)
+#nrow(df_navis_2d)
+
+#8: 2,3,4
+#14: 2
+#20: 1
+
+# relabel time.f
+df_navis_2d$time.f <- revalue(df_navis_2d$time.f, c("1" = "BDC-3", "2" = "HDT2", "3" = "HDT30", "4" = "HDT59", "5" = "R+12"))
+
+# drop vars 
+df_navis_2d <- df_navis_2d[-c(8,9,11)]
+
+# compute accuracy in percent
+df_navis_2d$acc <- df_navis_2d$acc/8*100
+
+# Compute z scores
+
+# define id vars for long format, and bdc data
+id_vars <- c('spatial_cognition_id', 'time.f', 'cond.f')
+bdc <- c("BDC-3")
+
+# Run z scores
+df_navis_2d_z <- func_z(df_navis_2d)
+
+# Invert so that higher number means better performance
+df_navis_2d_z[c(5,7:8)] <- df_navis_2d_z[c(5,7:8)] * -1
+
+# Add efficiency score
+df_navis_2d_z$eff_acc_z <- (df_navis_2d_z$rt_z + df_navis_2d_z$acc_z) / 2
+df_navis_2d_z$eff_totdistance_z <- (df_navis_2d_z$rt_z + df_navis_2d_z$total_distance_z) / 2
+df_navis_2d_z$eff_totrevists_z <- (df_navis_2d_z$rt_z + df_navis_2d_z$total_revisits) / 2
+```
+### Navigation Search Task VR
+```{r NAVIS VR}
+# read data
+list_of_files <- list.files(path = "/Users/astahn/Publications/AGBRESA/Data/Spatial Cognition/R+12", recursive = TRUE, 
+                            pattern = "SUMMARY_VIVE(.*)csv",
+                            full.name = TRUE)
+# Read all the files and create a FileName column to store filenames
+df_navis_vr <- rbindlist(lapply(list_of_files, fread),    #pulls only rows 7 and 8, which are indicated as collected by VR systems
+                     use.names = FALSE, idcol = "FileName")
+df_navis_vr <- as.data.frame(df_navis_vr)
+df_navis_vr <- df_navis_vr[order(df_navis_vr$ID, df_navis_vr$Session),]
+
+head(df_navis_vr, n=20)
+#remove duplicates because if data are pulled from summary files they may contain (redundant) data previously stored
+
+
+names(df_navis_vr) <- tolower(names(df_navis_vr)) # lower
+names(df_navis_vr) <- gsub(" ", "_", names(df_navis_vr)) # replace spaces
+df_navis_vr <- as.data.frame(df_navis_vr) # as df
+df_navis_vr <- subset(df_navis_vr, session !="0")
+df_navis_vr$id <- gsub("^0", "", df_navis_vr$id)
+df_navis_vr <- subset(df_navis_vr, id !="15" & id !="17" & id !="60" & id != "97" & id != "98" & id != "99" & id != "test")
+df_navis_vr <- subset(df_navis_vr, time !="110647" & time !="104631")
+
+# replace '-1'
+df_navis_vr[c(14,19,24,29,34,39,44,49,15,20,25,30,35,40,45,50)] <- lapply(df_navis_vr[c(14,19,24,29,34,39,44,49,15,20,25,30,35,40,45,50)], gsub, pattern = "-1", replacement = "0")
+df_navis_vr[c(14,19,24,29,34,39,44,49,15,20,25,30,35,40,45,50)] <- lapply(df_navis_vr[c(14,19,24,29,34,39,44,49,15,20,25,30,35,40,45,50)], as.numeric)
+
+# compute summary stats
+df_navis_vr$total_distance <-rowSums(df_navis_vr[c(12,17,22,27,32,37,42,47)])
+df_navis_vr$total_headrotation <-rowSums(df_navis_vr[c(13,18,23,28,33,38,43,48)])
+df_navis_vr$total_targetvisits <-rowSums(df_navis_vr[c(14,19,24,29,34,39,44,49)])
+df_navis_vr$total_revisits <-rowSums(df_navis_vr[c(15,20,20,30,35,40,45,50)])
+
+df_navis_vr <- df_navis_vr[c(4,5,7,8,9,10,52:55,51)]
+
+# rename columns
+names(df_navis_vr)[names(df_navis_vr)=="id"] <- "spatial_cognition_id"
+names(df_navis_vr)[names(df_navis_vr)=="session"] <- "time.f"
+names(df_navis_vr)[names(df_navis_vr)=="mode"] <- "cond.f"
+names(df_navis_vr)[names(df_navis_vr)=="completion_time"] <- "rt"
+names(df_navis_vr)[names(df_navis_vr)=="number_of_balls_collected"] <- "acc"
+
+# convert data types
+df_navis_vr[c(1:3,11)] <- lapply(df_navis_vr[c(1:3,11)], as.factor)
+df_navis_vr[c(4:10)] <- lapply(df_navis_vr[c(4:10)], as.numeric)
+
+# relabel time.f
+df_navis_vr$time.f <- revalue(df_navis_vr$time.f, c("1" = "BDC-6", "2" = "R+1", "5" = "R+12"))
+
+# drop vars 
+df_navis_vr <- df_navis_vr[-c(8,9,11)]
+
+# compute accuracy in percent
+df_navis_vr$acc <- df_navis_vr$acc/8*100
+
+# Compute z scores
+
+# define id vars for long format, and bdc data
+id_vars <- c('spatial_cognition_id', 'time.f', 'cond.f')
+bdc <- c("BDC-6")
+
+# Run z scores
+df_navis_vr_z <- func_z(df_navis_vr)
+
+# Invert so that higher number means better performance
+df_navis_vr_z[c(5,7:8)] <- df_navis_vr_z[c(5,7:8)] * -1
+
+# Add efficiency score
+df_navis_vr_z$eff_acc_z <- (df_navis_vr_z$rt_z + df_navis_vr_z$acc_z) / 2
+df_navis_vr_z$eff_totdistance_z <- (df_navis_vr_z$rt_z + df_navis_vr_z$total_distance_z) / 2
+df_navis_vr_z$eff_totrevists_z <- (df_navis_vr_z$rt_z + df_navis_vr_z$total_revisits) / 2
+
+#Note: acc_z returns NA if all balls are found (no variance can be computed)
+```
+
+## Spatial Cognition 2
+### Navigation Strategy
+```{r Navstrat}
+# read data
+df_navstrat <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Spatial Cognition/AGBRESA_DATA_060921.xlsx", sheet = "DATA NAVSTRAT raw")
+
+# convert data types
+df_navstrat[c(1:4)] <- lapply(df_navstrat[c(1:4)], factor)
+df_navstrat[c(5:7)] <- lapply(df_navstrat[c(5:7)], as.numeric)
+
+# Rename columns
+names(df_navstrat)[names(df_navstrat)=="corrects"] <- "accuracy"
+
+# compute z scores
+df_navstrat_z <- df_navstrat
+df_navstrat_z[c(5:7)] <- lapply(df_navstrat_z[c(5:7)], scale, scale = TRUE) # standardize
+colnames(df_navstrat_z)[c(5:7)] <- paste(colnames(df_navstrat_z)[c(5:7)], "z", sep="_") # clarify col names
+df_navstrat_z[c(6,7)] <- (df_navstrat_z[c(6,7)])*-1 # invert so that higher number means better performance
+df_navstrat_z$eff_z <- (df_navstrat_z$accuracy_z + df_navstrat_z$rt_z)/2 # efficiency
+```
+### Cognitive Mapping Task
+```{r CogMap}
+# read data
+# rsl amb controls
+df_cogmap_rsl <- read_excel("/Users/astahn/Publications/Bed Rest RSL/Cognitive_Mapping/Results_Cognitive Mapping_20190923.xlsx", sheet = "mean(<=90)")
+
+# rename column (spelling was incorrect)
+df_cogmap_rsl$group[df_cogmap_rsl$group == "HBDR"] <- "HDBR"
+
+# desc summaries
+summary(tableby(interaction(day,group) ~ error + rt_1 + rt_2 + rt_3, data = df_cogmap_rsl), digits=0, digits.p=3, digits.pct=0)
+
+# rename columns and levels 
+colnames(df_cogmap_rsl)[9] <- "group_2"
+df_cogmap_rsl$group_2 <- gsub("CTRL", "CTRL_Amb", df_cogmap_rsl$group_2) #clean
+df_cogmap_rsl$group_3 <- df_cogmap_rsl$group_2
+df_cogmap_rsl$sex <- c(rep("M",nrow(df_cogmap_rsl)))
+df_cogmap_rsl_amb_ctrl <- subset(df_cogmap_rsl, group_2=="CTRL_Amb")[c(1,14,9, 15,11,3,4)]
+df_cogmap_rsl_r180 <- subset(df_cogmap_rsl, day=="R+180")
+df_cogmap_rsl_r180$group_2 <- df_cogmap_rsl_r180$day
+df_cogmap_rsl_r180$group_3 <- df_cogmap_rsl_r180$day
+df_cogmap_rsl_r180 <- subset(df_cogmap_rsl_r180, day=="R+180")[c(1,14,9, 15,11,3,4)]
+df_cogmap_rsl <- rbind(df_cogmap_rsl_r180, df_cogmap_rsl_amb_ctrl)
+df_cogmap_rsl$id <- paste(df_cogmap_rsl$id, "rsl", sep="_") 
+
+# agbresa
+df_cogmap_agbresa_all <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Spatial_Cognition_org/Cogmap/CogMapping_AGBRESA_200525_AS.xlsx", sheet = "mean(all)")
+df_cogmap_agbresa <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Spatial_Cognition_org/Cogmap/CogMapping_AGBRESA_200525_AS.xlsx", sheet = "mean(<90)")
+df_cogmap_agbresa <- df_cogmap_agbresa[c(1,3:4)]
+
+data.id <- read.csv("/Users/astahn/Publications/AGBRESA/Data/Spatial Cognition/spatial_cognition_ids.csv", header = TRUE, sep = ",")
+data.id <- data.id[-c(1)]
+df_cogmap_agbresa <- merge(df_cogmap_agbresa, data.id, by="spatial_cognition_id")
+df_cogmap_agbresa$id <- as.factor(as.character(df_cogmap_agbresa$id))
+names(df_cogmap_agbresa)
+df_cogmap_agbresa <- df_cogmap_agbresa[c(4,2,3)]
+
+# add data demographics
+df_demo <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Data All.xlsx", sheet = "Data Demo")
+df_demo[c(1:5)] <- lapply(df_demo[c(1:5)], factor)
+df_cogmap_agbresa <- merge(df_demo[c(1,3:6)], df_cogmap_agbresa, by="id") # merge
+
+# merge
+df_cogmap <- rbind(df_cogmap_rsl, df_cogmap_agbresa)
+df_cogmap[c(1:4)] <- lapply(df_cogmap[c(1:4)], factor)
+
+
+# compute z scores
+df_cogmap_z <- df_cogmap
+df_cogmap_z[c(6:7)] <- lapply(df_cogmap_z[c(6:7)], scale, scale = TRUE) 
+colnames(df_cogmap_z)[c(6:7)] <- paste(colnames(df_cogmap_z)[c(6:7)], "z", sep="_") # clarify col names
+df_cogmap_z$error_z <- df_cogmap_z$error_z*-1 # invert so that higher number means better performance
+df_cogmap_z$rt_1_z <- df_cogmap_z$rt_1_z*-1 # invert so that higher number means better performance
+df_cogmap_z$eff_z <- (df_cogmap_z$rt_1_z + df_cogmap_z$error_z)/2
+```
+
+### Plus Maze
+```{r Plus Maze}
+# read data
+df_pm <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Spatial Cognition/AGBRESA_DATA_060921.xlsx", sheet = "DATA PM")
+
+# convert data types
+df_pm[c(1:2)] <- lapply(df_pm[c(1:2)], factor)
+df_pm[c(3:20)] <- lapply(df_pm[c(3:20)], as.numeric)
+names(df_pm) <- tolower(names(df_pm))#lower
+
+# compute z scores
+df_pm_z <- df_pm
+df_pm_z[c(3:20)] <- lapply(df_pm_z[c(3:20)], scale, scale = TRUE) 
+#df_pm_z <- as.data.frame(df_pm_z)
+colnames(df_pm_z)[c(3:20)] <- paste(colnames(df_pm_z)[c(3:20)], "z", sep="_") # clarify col names
+df_pm_z[c(4,6,8,10,12,14,16,18,20)] <- (df_pm_z[c(4,6,8,10,12,14,16,18,20)])*-1 # invert so that higher number means better performance
+```
+### Virtual Water Maze
+```{r vWM}
+# read data
+df_wm <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Spatial Cognition/AGBRESA_DATA_060921.xlsx", sheet = "Data WM")
+
+# convert data types
+df_wm[c(1:2)] <- lapply(df_wm[c(1:2)], factor)
+
+# rename columns
+colnames(df_wm)[4] <- "latency_s" 
+colnames(df_wm)[5] <- "pathlength_au" 
+colnames(df_wm)[6] <- "hesitation_s" 
+colnames(df_wm)[7] <- "floating_s" 
+colnames(df_wm)[8] <- "goalcrossings" 
+colnames(df_wm)[9] <- "initialheadingerror" 
+colnames(df_wm)[10] <- "predir_num" 
+
+df_wm_tmp <- df_wm
+df_wm_tmp = reshape2::melt(df_wm_tmp, id.vars = c("spatial_cognition_id", "time.f", "trial")) # arrange in 'full' long format (AND subset to specific time points) 
+df_wm_tmp <- aggregate(value ~ spatial_cognition_id*time.f*variable, data=df_wm_tmp, FUN=mean) # mean by id and variable
+df_wm <- reshape2::dcast(df_wm_tmp, spatial_cognition_id+time.f~variable)
+remove(df_wm_tmp)
+
+
+df_wm <- as.tibble(df_wm)
+
+# drop R+12
+df_wm <- subset(df_wm, time.f =="HDT59")
+df_wm <- droplevels(df_wm)
+
+# compute z scores
+df_wm_z <- df_wm
+df_wm_z[c(3:9)] <- lapply(df_wm_z[c(3:9)], scale, scale = TRUE) # standardize
+colnames(df_wm_z)[c(3:9)] <- paste(colnames(df_wm_z)[c(3:9)], "z", sep="_") # clarify col names
+df_wm_z[c(3,4,8)] <- (df_wm_z[c(3,4,8)])*-1 # invert
+```
+### Perspective Taking Spatial Orientation Test (SOT)
+```{r SOT}
+# read data
+# pull filenames
+list_of_files <- list.files(path = "/Users/astahn/Publications/AGBRESA/Data/Spatial Cognition", recursive = TRUE, 
+                                        pattern = "*-*-19.csv", 
+                                        full.names = TRUE)
+# combine files in df
+df_sot <- rbindlist(sapply(list_of_files, fread, simplify = FALSE,skip=4,nrows=60), #skip first 4 lines and drop 64th line (total score)
+          use.names = TRUE, idcol = "FileName")
+
+# create id
+df_sot <- as.data.frame(df_sot)
+#names(df_sot)[names(df_sot)=="FileName"] <- "id"
+
+df_sot$id <- df_sot$'FileName'
+df_sot$id <- gsub(".*PERSTAKE_DATA/","", df_sot$id) # delete everthing before and up to
+df_sot$id <- gsub(" .*","", df_sot$id) # keep everthing after and up to space
+#create time.f
+df_sot$time.f <- df_sot$FileName 
+df_sot$time.f <- gsub(".*Spatial Cognition/","", df_sot$time.f) # delete everthing before and up to Spatial Cognition/
+df_sot$time.f <- gsub("/AGBRESA_.*","", df_sot$time.f) 
+
+names(df_sot)[names(df_sot)=="Angle difference (degrees)"] <- "pointing_error"
+names(df_sot)[names(df_sot)=="Subject's response time (sec)"] <- "rt"
+names(df_sot)[names(df_sot)=="id"] <- "spatial_cognition_id"
+
+df_sot <- df_sot[c(11,12,9,8,10)]
+colnames(df_sot)[c(3:5)] <- paste("sot", colnames(df_sot)[c(3:5)], sep="_") # clarify col names
+names(df_sot) <- tolower(names(df_sot)) # lower
+
+df_sot <- subset(df_sot, spatial_cognition_id!="24" | time.f !="R+12")
+df_sot <- subset(df_sot, spatial_cognition_id!="25" | time.f !="R+12")
+df_sot <- subset(df_sot, spatial_cognition_id!="26" | time.f !="R+12")
+df_sot <- subset(df_sot, spatial_cognition_id!="27" | time.f !="R+12")
+
+# compute sd of signed pointing error using circular stats
+df_sot <- ddply(df_sot, c("spatial_cognition_id", "time.f"), summarise,
+                  rt=mean(sot_rt),
+                  pointing_error=mean(sot_pointing_error),
+                  score=mean(sot_score)   
+                )
+df_sot <- as.tibble(df_sot)
+df_sot[c(1:2)] <- lapply(df_sot[c(1:2)], as.factor)
+# compute z scores
+df_sot_z <- df_sot
+df_sot_z[c(3:5)] <- lapply(df_sot_z[c(3:5)], scale, scale = TRUE) # standardize
+#df_sot_z <- as.data.frame(df_sot_z)
+colnames(df_sot_z)[c(3:5)] <- paste(colnames(df_sot_z)[c(3:5)], "z", sep="_") # clarify col names
+df_sot_z$rt_z <- df_sot_z$rt_z*-1
+df_sot_z$pointing_error_z <- df_sot_z$pointing_error_z*-1
+
+# drop R+12
+df_sot_z <- subset(df_sot_z, time.f !="R+12")
+df_sot_z <- droplevels(df_sot_z)
+df_sot <- subset(df_sot, time.f !="R+12")
+df_sot <- droplevels(df_sot)
+# combine R+12 and HDT60
+#df_sot$time.f <- gsub("R+12","HDT60", df_sot$time.f) #sync timepoints HDT and R+12 because some subjects missed taking sot on HDT60 -> data need to be interpreted cautiously
+```
+
+## Executive Control
+### Dual Task
+```{r Dual Task}
+# read data
+df_dualtask <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Spatial Cognition/AGBRESA_DATA_060921.xlsx", sheet = "DATA DUAL")
+
+# convert data types
+df_dualtask[c(1:5)] <- lapply(df_dualtask[c(1:5)], factor)
+df_dualtask[c(6:9)] <- lapply(df_dualtask[c(6:9)], as.numeric)
+
+# delete leading zeros in id
+df_dualtask$spatial_cognition_id <- sub("^0+", "", df_dualtask$spatial_cognition_id)
+
+# rename columns
+names(df_dualtask)[names(df_dualtask)=="hit"] <- "accuracy"
+#df_dualtask[c(6:9)] <- lapply(df_dualtask[c(6:9)], scale, scale = TRUE) #standardize
+#colnames(df_dualtask)[c(6:9)] <- paste(colnames(df_dualtask)[c(6:9)], "z", sep="_") #clarify col names
+
+# Compute z scores
+
+# define id vars for long format, and bdc data
+id_vars <- c("spatial_cognition_id", "time.f", "task", "stimType","target")
+bdc <- c("BDC-6")
+
+# Run z scores
+df_dualtask_z <- func_z(df_dualtask)
+
+# Invert so that higher number means better performance
+df_dualtask_z[c(7:9)] <- df_dualtask_z[c(7:9)] * -1
+
+# Add efficiency score
+df_dualtask_z$eff_acc_z <- (df_dualtask_z$rt_z + df_dualtask_z$accuracy_z) / 2
+df_dualtask_z <- as.tibble(df_dualtask_z)
+```
+### Switch Task
+```{r Switch Task}
+# read data
+df_switch <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Spatial Cognition/AGBRESA_DATA_060921.xlsx", sheet = "DATA TASKSWITCH")
+
+# delete leading zeros in id
+df_switch$spatial_cognition_id <- sub("^0+", "", df_switch$spatial_cognition_id)
+
+# rename columns
+names(df_switch)[names(df_switch)=="hit"] <- "accuracy"
+names(df_switch)
+
+# convert data types
+df_switch[c(1:6)] <- lapply(df_switch[c(1:6)], as.factor)
+df_switch[c(7:10)] <- lapply(df_switch[c(7:10)], as.numeric)
+
+# Compute z scores
+
+# define id vars for long format, and bdc data
+id_vars <- c("spatial_cognition_id", "time.f", "task","cti","type","valence")
+bdc <- c("BDC-6")
+
+# Run z scores
+df_switch_z <- func_z(df_switch)
+
+# Invert so that higher number means better performance
+df_switch_z[c(8:10)] <- df_switch_z[c(8:10)] * -1
+
+# Add efficiency score
+df_switch_z$eff_acc_z <- (df_switch_z$rt_z + df_switch_z$accuracy_z) / 2
+df_switch_z <- as.tibble(df_switch_z)
+```
+# Replace Spatial Cognition IDs With Generic IDs
+```{r add generic IDs}
+# read data
+data.id <- read.csv("/Users/astahn/Publications/AGBRESA/Data/Spatial Cognition/spatial_cognition_ids.csv",header = TRUE, sep = ",")
+data.id <- data.id[-c(1)]
+
+# sut
+df_sut <- merge(df_sut, data.id, by="spatial_cognition_id")
+df_sut$id <- as.factor(as.character(df_sut$id))
+names(df_sut)
+df_sut <- df_sut[c(7,2:6)]
+
+df_sut_z <- merge(df_sut_z, data.id, by="spatial_cognition_id")
+df_sut_z$id <- as.factor(as.character(df_sut_z$id))
+names(df_sut_z)
+df_sut_z <- df_sut_z[c(8,2:7)]
+
+# pto
+df_pto <- merge(df_pto, data.id, by="spatial_cognition_id")
+df_pto$id <- as.factor(as.character(df_pto$id))
+names(df_pto)
+df_pto <- df_pto[c(9, 2:8)]
+
+df_pto_z <- merge(df_pto_z, data.id, by="spatial_cognition_id")
+df_pto_z$id <- as.factor(as.character(df_pto_z$id))
+names(df_pto_z)
+df_pto_z <- df_pto_z[c(10, 2:9)]
+
+# 4mtn
+df_4mtn <- merge(df_4mtn, data.id, by="spatial_cognition_id")
+df_4mtn$id <- as.factor(as.character(df_4mtn$id))
+names(df_4mtn)
+df_4mtn <- df_4mtn[c(5, 2:4)]
+
+df_4mtn_z <- merge(df_4mtn_z, data.id, by="spatial_cognition_id")
+df_4mtn$id <- as.factor(as.character(df_4mtn_z$id))
+names(df_4mtn_z)
+df_4mtn_z <- df_4mtn_z[c(6, 2:5)]
+
+# navis_2d
+df_navis_2d <- merge(df_navis_2d, data.id, by="spatial_cognition_id")
+df_navis_2d$id <- as.factor(as.character(df_navis_2d$id))
+names(df_navis_2d)
+df_navis_2d <- df_navis_2d[c(9, 2:8)]
+
+df_navis_2d_z <- merge(df_navis_2d_z, data.id, by="spatial_cognition_id")
+df_navis_2d_z$id <- as.factor(as.character(df_navis_2d_z$id))
+names(df_navis_2d_z)
+df_navis_2d_z <- df_navis_2d_z[c(12, 2:11)]
+
+# navis_vr
+df_navis_vr <- merge(df_navis_vr, data.id, by="spatial_cognition_id")
+df_navis_vr$id <- as.factor(as.character(df_navis_vr$id))
+names(df_navis_vr)
+df_navis_vr <- df_navis_vr[c(9, 2:8)]
+
+df_navis_vr_z <- merge(df_navis_vr_z, data.id, by="spatial_cognition_id")
+df_navis_vr_z$id <- as.factor(as.character(df_navis_vr_z$id))
+df_navis_vr_z <- df_navis_vr_z[c(12, 2:11)]
+
+# sot
+df_sot <- merge(df_sot, data.id, by="spatial_cognition_id")
+df_sot$id <- as.factor(as.character(df_sot$id))
+names(df_sot)
+df_sot <- df_sot[c(6, 2:5)]
+
+df_sot_z <- merge(df_sot_z, data.id, by="spatial_cognition_id")
+df_sot_z$id <- as.factor(as.character(df_sot_z$id))
+names(df_sot_z)
+df_sot_z <- df_sot_z[c(6, 2:5)]
+
+# wm
+df_wm <- merge(df_wm, data.id, by="spatial_cognition_id")
+df_wm$id <- as.factor(as.character(df_wm$id))
+names(df_wm)
+df_wm <- df_wm[c(10, 2:9)]
+
+df_wm_z <- merge(df_wm_z, data.id, by="spatial_cognition_id")
+df_wm_z$id <- as.factor(as.character(df_wm_z$id))
+names(df_wm_z)
+df_wm_z <- df_wm_z[c(10, 2:9)]
+
+# pm
+df_pm <- merge(df_pm, data.id, by="spatial_cognition_id")
+df_pm$id <- as.factor(as.character(df_pm$id))
+names(df_pm)
+df_pm <- df_pm[c(21, 2:20)]
+
+df_pm_z <- merge(df_pm_z, data.id, by="spatial_cognition_id")
+df_pm_z$id <- as.factor(as.character(df_pm_z$id))
+names(df_pm_z)
+df_pm_z <- df_pm_z[c(21, 2:20)]
+
+# navstrat 
+df_navstrat <- merge(df_navstrat, data.id, by="spatial_cognition_id")
+df_navstrat$id <- as.factor(as.character(df_navstrat$id))
+names(df_navstrat)
+df_navstrat <- df_navstrat[c(8, 2:7)]
+
+df_navstrat_z <- merge(df_navstrat_z, data.id, by="spatial_cognition_id")
+df_navstrat_z$id <- as.factor(as.character(df_navstrat_z$id))
+names(df_navstrat_z)
+df_navstrat_z <- df_navstrat_z[c(9, 2:8)]
+
+# dual task
+df_dualtask <- merge(df_dualtask, data.id, by="spatial_cognition_id")
+df_dualtask$id <- as.factor(as.character(df_dualtask$id))
+names(df_dualtask)
+df_dualtask <- df_dualtask[c(10, 2:9)]
+
+df_dualtask_z <- merge(df_dualtask_z, data.id, by="spatial_cognition_id")
+df_dualtask_z$id <- as.factor(as.character(df_dualtask_z$id))
+names(df_dualtask_z)
+df_dualtask_z <- df_dualtask_z[c(11, 2:10)]
+
+# switch task
+df_switch <- merge(df_switch, data.id, by="spatial_cognition_id")
+df_switch$id <- as.factor(as.character(df_switch$id))
+names(df_switch)
+df_switch <- df_switch[c(11,2:10)]
+
+df_switch_z <- merge(df_switch_z, data.id, by="spatial_cognition_id")
+df_switch_z$id <- as.factor(as.character(df_switch_z$id))
+names(df_switch_z)
+df_switch_z <- df_switch_z[c(12,2:11)]
+```
+
+# Write to Excel File
+```{r export}
+list_of_datasets <- list( "Data SUT" = df_sut,
+                          "Data PTO" = df_pto,
+                          "Data 4MTN" = df_4mtn,
+                          "Data NAVIS 2D" = df_navis_2d,
+                          "Data NAVIS VR" = df_navis_vr,
+                          "Data SUT z score" = df_sut_z,
+                          "Data PTO z score" = df_pto_z,
+                          "Data 4MTN z score" = df_4mtn_z,
+                          "Data NAVIS 2D z score" = df_navis_2d_z,
+                          "Data NAVIS VR z score" = df_navis_vr_z)
+write.xlsx(list_of_datasets, file = "./Data/Data Spatial Cognition 1.xlsx", overwrite = TRUE)
+
+list_of_datasets <- list( "Data SOT" = df_sot,
+                          "Data WM" = df_wm,
+                          "Data PM" = df_pm,
+                          "Data Navstrat" = df_navstrat,
+                          "Data Cognitive Mapping" = df_cogmap,
+                          "Data SOT z score" = df_sot_z,
+                          "Data WM z score" = df_wm_z,
+                          "Data PM z score" = df_pm_z,
+                          "Data Navstrat z score" = df_navstrat_z,
+                          "Data Cognitive Mapping z score" = df_cogmap_z)
+write.xlsx(list_of_datasets, file = "./Data/Data Spatial Cognition 2.xlsx", overwrite = TRUE)
+
+list_of_datasets <- list( "Data Dual" = df_dualtask,
+                          "Data Switch" = df_switch,
+                          "Data Dual z score" = df_dualtask_z,
+                          "Data Switch z score" = df_switch_z)
+write.xlsx(list_of_datasets, file = "./Data/Data Executive Control.xlsx", overwrite = TRUE)
+```
