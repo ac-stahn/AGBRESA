@@ -909,11 +909,11 @@ list_of_datasets <- list( "Data SUT" = df_sut,
                           "Data 4MTN" = df_4mtn,
                           "Data NAVIS 2D" = df_navis_2d,
                           "Data NAVIS VR" = df_navis_vr,
-                          "Data SUT z score" = df_sut_z,
-                          "Data PTO z score" = df_pto_z,
-                          "Data 4MTN z score" = df_4mtn_z,
-                          "Data NAVIS 2D z score" = df_navis_2d_z,
-                          "Data NAVIS VR z score" = df_navis_vr_z)
+                          "Data SUT z" = df_sut_z,
+                          "Data PTO z" = df_pto_z,
+                          "Data 4MTN z" = df_4mtn_z,
+                          "Data NAVIS 2D z" = df_navis_2d_z,
+                          "Data NAVIS VR z" = df_navis_vr_z)
 write.xlsx(list_of_datasets, file = "./Data/Data Spatial Cognition 1.xlsx", overwrite = TRUE)
 
 list_of_datasets <- list( "Data SOT" = df_sot,
@@ -921,16 +921,16 @@ list_of_datasets <- list( "Data SOT" = df_sot,
                           "Data PM" = df_pm,
                           "Data Navstrat" = df_navstrat,
                           "Data Cognitive Mapping" = df_cogmap,
-                          "Data SOT z score" = df_sot_z,
-                          "Data WM z score" = df_wm_z,
-                          "Data PM z score" = df_pm_z,
-                          "Data Navstrat z score" = df_navstrat_z,
-                          "Data Cognitive Mapping z score" = df_cogmap_z)
+                          "Data SOT z" = df_sot_z,
+                          "Data WM z" = df_wm_z,
+                          "Data PM z" = df_pm_z,
+                          "Data Navstrat z" = df_navstrat_z,
+                          "Data Cognitive Mapping z" = df_cogmap_z)
 write.xlsx(list_of_datasets, file = "./Data/Data Spatial Cognition 2.xlsx", overwrite = TRUE)
 
 list_of_datasets <- list( "Data Dual" = df_dualtask,
                           "Data Switch" = df_switch,
-                          "Data Dual z score" = df_dualtask_z,
-                          "Data Switch z score" = df_switch_z)
+                          "Data Dual z" = df_dualtask_z,
+                          "Data Switch z" = df_switch_z)
 write.xlsx(list_of_datasets, file = "./Data/Data Executive Control.xlsx", overwrite = TRUE)
 ```
