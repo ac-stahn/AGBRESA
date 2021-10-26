@@ -247,8 +247,8 @@ df_cort_z <- as_tibble(df_cort_z)
 # Save data
 ```{r export data}
 list_of_datasets <- list("Data Cortisol" = df_cort,
-                         "Data Cortisol z score" = df_cort_z,
+                         "Data Cortisol z" = df_cort_z,
                          "Data Blood" = df_blood,
-                         "Data Blood z score" = df_blood_z)
+                         "Data Blood z" = df_blood_z)
 write.xlsx(list_of_datasets, file = "./Data/Data Biomarker.xlsx", overwrite = TRUE)
 ```

@@ -84,9 +84,8 @@ func_z <- function(x) {
 }
 
 ```
-
 # Load and Preprocess rsfMRI Data
-```{r rsfmri}
+```{r rsfmri AGBRESA}
 # rsfmri
 # AGpoolvsControlT1T3
 # Read data
@@ -113,11 +112,19 @@ colnames(df_rsfrmi)[5] <- "meanFC_th3.2"
 colnames(df_rsfrmi)[6] <- "meanFC_th3.8"
 
 # Assign df
-df_rsfrmi_AGvCTRL_BDC_HDT59 <- df_rsfrmi
+df_rsfrmi_ag_ctrl <- df_rsfrmi
 
 # Convert var type
-df_rsfrmi_AGvCTRL_BDC_HDT59[c(1:2)] <- lapply(df_rsfrmi_AGvCTRL_BDC_HDT59[c(1:2)], as.factor)
-df_rsfrmi_AGvCTRL_BDC_HDT59 <- as_tibble(df_rsfrmi_AGvCTRL_BDC_HDT59)
+df_rsfrmi_ag_ctrl[c(1:2)] <- lapply(df_rsfrmi_ag_ctrl[c(1:2)], as.factor)
+df_rsfrmi_ag_ctrl <- as_tibble(df_rsfrmi_ag_ctrl)
+
+# Define id vars for long format, and bdc data
+id_vars <- c("id", "time.f")
+bdc <- quote( time.f == "BDC-3" )
+
+# Run z scores
+df_rsfrmi_ag_ctrl_z <- func_z(df_rsfrmi_ag_ctrl)
+df_rsfrmi_ag_ctrl_z <- as_tibble(df_rsfrmi_ag_ctrl_z)
 
 # cAGvsControl
 # Read data
@@ -143,14 +150,22 @@ colnames(df_rsfrmi)[5] <- "meanFC_th3.4"
 colnames(df_rsfrmi)[6] <- "meanFC_th3.5"
 
 # Assign df
-df_rsfrmi_cAGvsCTRL_BDC_HDT59 <- df_rsfrmi
+df_rsfrmi_cag_ctrl <- df_rsfrmi
 
 # Convert var type
-df_rsfrmi_cAGvsCTRL_BDC_HDT59[c(1:2)] <- lapply(df_rsfrmi_cAGvsCTRL_BDC_HDT59[c(1:2)], as.factor)
-df_rsfrmi_cAGvsCTRL_BDC_HDT59 <- as_tibble(df_rsfrmi_cAGvsCTRL_BDC_HDT59)
+df_rsfrmi_cag_ctrl[c(1:2)] <- lapply(df_rsfrmi_cag_ctrl[c(1:2)], as.factor)
+df_rsfrmi_cag_ctrl <- as_tibble(df_rsfrmi_cag_ctrl)
+
+# Define id vars for long format, and bdc data
+id_vars <- c("id", "time.f")
+bdc <- quote( time.f == "BDC-3" )
+
+# Run z scores
+df_rsfrmi_cag_ctrl_z <- func_z(df_rsfrmi_cag_ctrl)
+df_rsfrmi_cag_ctrl_z <- as_tibble(df_rsfrmi_cag_ctrl_z)
 ```
-# Load and Preprocess TSF LC Data
-```{r rsfmri}
+# Load and Preprocess FSE LC Data
+```{r FSE LC AGBRESA}
 # lc
 # Read data
 df_lc <- read.csv("/Users/astahn/Publications/AGBRESA/Data/LC/LCNE_AGBRESA_semiaut_LCmetaMask_threshold50plus_s01f_complete_mean_zcorr_Multimodal_acrossHem_splitTime.csv", header = TRUE, sep = ",")
@@ -168,7 +183,7 @@ df_lc <- reshape2::melt(df_lc, id.vars = "id")
 df_lc$time.f <- gsub( "^.*0", "", df_lc$variable ) # delete everything before ST
 
 # Relabel
-df_lc$time.f <- revalue(df_lc$time.f, c("1"="BDC-4", "2"="HDT30", "3"="HDT59", "4"="R+11"))
+df_lc$time.f <- revalue(df_lc$time.f, c("1"="BDC-3", "2"="HDT30", "3"="HDT59", "4"="R+11"))
 df_lc <- df_lc[c(1,4,2,3)]
 
 # clean variable
@@ -183,14 +198,552 @@ df_lc <- reshape2::dcast(df_lc, id + time.f ~ variable)
 
 # Define id vars for long format, and bdc data
 id_vars <- c("id", "time.f")
-bdc <- quote( time.f == "BDC-4" )
+bdc <- quote( time.f == "BDC-3" )
 
 # Run z scores
 df_lc_z <- func_z(df_lc)
 df_lc_z <- as_tibble(df_lc_z)
 ```
+# Load and Preprocess VBM
+```{r VBM AGBRESA}
+# Read data
+df_vbm <- read.csv("/Users/astahn/Publications/AGBRESA/Data/VBM/New_20200608/VBM_CATcross_AGi_c_temporalcortex.csv", header = TRUE, sep = ",")
+
+
+df_vbm <- read.csv("/Users/astahn/Publications/AGBRESA/Data/VBM/New_20200608/VBM_CATcross_correct_direction!!!_wide_.csv", header = TRUE, sep = ",")
+
+# Drop vars
+df_vbm <- df_vbm[-c(2:4)]
+
+# Convert column names to lower case
+names(df_vbm) <- tolower(names(df_vbm))
+
+# melt to long
+df_vbm <- reshape2::melt(df_vbm, id.vars = c("id"))
+df_vbm$time.f <- df_vbm$variable
+
+# Extract time
+df_vbm$time.f <- gsub(".*insula.", "", df_vbm$time.f)     
+
+
+# Extract side
+df_vbm$side <- df_vbm$variable
+df_vbm$side <- gsub("insula.*", "", df_vbm$side)    
+df_vbm$side <- gsub("control_ag_", "", df_vbm$side)    
+
+df_vbm <- df_vbm[-c(2)]
+
+# Relabel time.f
+df_vbm$time.f <- revalue(df_vbm$time.f, c("bdc3"="BDC-3", "hdt30"="HDT30", "hdt59"="HDT59", "r11"="R+11"))
+
+# Convert to wide
+df_vbm <- reshape2::dcast(df_vbm, id + time.f ~ side, value.var = "value")
+
+# Rename
+colnames(df_vbm)[3] <-  "insula_left"
+colnames(df_vbm)[4] <-  "insula_right"
+
+# Convert var type
+df_vbm[c(1:2)] <- lapply(df_vbm[c(1:2)], as.factor)
+df_vbm <- as_tibble(df_vbm)
+
+# Define id vars for long format, and bdc data
+id_vars <- c("id", "time.f")
+bdc <- quote( time.f == "BDC-3" )
+
+# Run z scores
+df_vbm_z <- func_z(df_vbm)
+df_vbm_z <- as_tibble(df_vbm_z)
+```
+# Load and Preprocess AGBRESA HC UPenn
+```{r highres HC UPenn AGBRESA}
+# AGBRESA
+# UPenn
+df_hc_ag_pre_post_upenn <- read.csv("/Users/astahn/Publications/AGBRESA/Data/High Res HC/20200119/UPenn_Atlas.csv", header = TRUE, sep = ",")
+
+# Clean ID
+df_hc_ag_pre_post_upenn$ID <- gsub(".*ST_(.+)_20.*", "\\1", df_hc_ag_pre_post_upenn$ID)
+
+# Extract time
+df_hc_ag_pre_post_upenn$time.f <- df_hc_ag_pre_post_upenn$ID
+df_hc_ag_pre_post_upenn$time.f <- gsub( "_2", "", df_hc_ag_pre_post_upenn$time.f )
+df_hc_ag_pre_post_upenn$time.f <- gsub(".*_","",df_hc_ag_pre_post_upenn$time.f)
+#df_hc_ag_pre_post_upenn$time.f <- gsub( "^*._", "", df_hc_ag_pre_post_upenn$time.f )
+
+# Extract ID
+df_hc_ag_pre_post_upenn$ID <- gsub( "_.*$", "", df_hc_ag_pre_post_upenn$ID ) # extract everything after _ from start
+
+# Remove duplicate rows
+df_hc_ag_pre_post_upenn <- df_hc_ag_pre_post_upenn %>% distinct()
+
+# Drop incomplete data
+df_hc_ag_pre_post_upenn <- subset(df_hc_ag_pre_post_upenn, ID != "S1")
+
+# AGBRESA S1 and RSL  
+df_hc_rsl_and_ag_s1_upenn <- read.csv("/Users/astahn/Publications/AGBRESA/Data/High Res HC/20201208/_UPenn_Atlas_newMPI_RSL.csv", header = TRUE, sep = ",")
+
+# Clean ID
+df_hc_rsl_and_ag_s1_upenn$ID <- gsub( "-", "_", df_hc_rsl_and_ag_s1_upenn$ID )
+
+# Extract time.f
+df_hc_rsl_and_ag_s1_upenn$time.f <- df_hc_rsl_and_ag_s1_upenn$ID
+df_hc_rsl_and_ag_s1_upenn$time.f <- gsub('.{7}$', '', df_hc_rsl_and_ag_s1_upenn$time.f) #delete last 11 digits
+df_hc_rsl_and_ag_s1_upenn$time.f <- gsub( "2016_", "", df_hc_rsl_and_ag_s1_upenn$time.f )
+df_hc_rsl_and_ag_s1_upenn$time.f <- gsub(".*_(.+)_.*", "\\1", df_hc_rsl_and_ag_s1_upenn$time.f)
+
+# Extract ID
+df_hc_rsl_and_ag_s1_upenn$ID <- gsub( "_.*$", "", df_hc_rsl_and_ag_s1_upenn$ID )
+
+# Rearrange
+df_hc_rsl_and_ag_s1_upenn <- df_hc_rsl_and_ag_s1_upenn[c(1,47,2:46)]
+
+# Relabel time.f
+df_hc_rsl_and_ag_s1_upenn$time.f <- revalue(df_hc_rsl_and_ag_s1_upenn$time.f, c("BDC4"="BDC-4", "R12"="R+12", "HDT"="HDT58", "BDC"="BDC-4"))
+
+# Extract RSL
+df_hc_rsl_upenn <- subset(df_hc_rsl_and_ag_s1_upenn, ID !="S1")
+
+# Extract S1 AGBRESA
+df_hc_ag_s1_upenn <- subset(df_hc_rsl_and_ag_s1_upenn, ID =="S1")
+
+# AGBRESA HDT30 R+11
+df_hc_ag_30_R11_upenn <- read.csv("/Users/astahn/Publications/AGBRESA/Data/High Res HC/20200603/_UPenn_Atlas_AGBRESA_HDT30_R+11.csv", header = TRUE, sep = ",")
+df_hc_ag_30_R11_upenn <- df_hc_ag_30_R11_upenn[-c(49, 50),] # drop empty rows
+colnames(df_hc_ag_30_R11_upenn)[2] <-  "time.f"
+
+# Drop incomplete data
+df_hc_ag_30_R11_upenn <- subset(df_hc_ag_30_R11_upenn, ID != "S1")
+
+# Combine dfs
+# Drop ICV (missing from AGBRESA HDT30 R+11, and not needed because only corrected data will be used)
+df_hc_ag_upenn <- rbind(df_hc_ag_pre_post_upenn[-c(13)], df_hc_ag_s1_upenn[-c(14)])
+df_hc_ag_upenn <- rbind(df_hc_ag_upenn, df_hc_ag_30_R11_upenn)
+names(df_hc_ag_upenn)
+
+# Rearrange
+df_hc_ag_upenn <- df_hc_ag_upenn[c(1,46,2:45)]
+df_hc_ag_upenn <- as_tibble(df_hc_ag_upenn)
+
+# Convert data type
+df_hc_ag_upenn[c(1:2)] <- lapply(df_hc_ag_upenn[c(1:2)], as.factor)
+
+# Clean vars
+# Convert column names to lower case
+names(df_hc_ag_upenn) <- tolower(names(df_hc_ag_upenn))
+
+# Clean 
+# Delete raw data
+df_hc_ag_upenn <- df_hc_ag_upenn[grep("raw", names(df_hc_ag_upenn), value = TRUE, invert = TRUE)]
+
+# Delete raw data upenn_usegray_corr_
+names(df_hc_ag_upenn) <- gsub("upenn_usegray_corr_", "", names(df_hc_ag_upenn))
+
+# Calculate bilateral volumes
+df_hc_ag_upenn$dg <- df_hc_ag_upenn$dg_left + df_hc_ag_upenn$dg_right
+df_hc_ag_upenn$ca1 <- df_hc_ag_upenn$ca1_left + df_hc_ag_upenn$ca1_right
+df_hc_ag_upenn$ca2 <- df_hc_ag_upenn$ca2_left + df_hc_ag_upenn$ca2_right
+df_hc_ag_upenn$ca3 <- df_hc_ag_upenn$ca3_left + df_hc_ag_upenn$ca3_right
+df_hc_ag_upenn$misc <- df_hc_ag_upenn$misc_left + df_hc_ag_upenn$misc_right
+df_hc_ag_upenn$sub <- df_hc_ag_upenn$sub_left + df_hc_ag_upenn$sub_right
+df_hc_ag_upenn$erc <- df_hc_ag_upenn$erc_left + df_hc_ag_upenn$erc_right
+df_hc_ag_upenn$ba35 <- df_hc_ag_upenn$ba35_left + df_hc_ag_upenn$ba35_right
+df_hc_ag_upenn$ba36 <- df_hc_ag_upenn$ba36_left + df_hc_ag_upenn$ba36_right
+df_hc_ag_upenn$phc <- df_hc_ag_upenn$phc_left + df_hc_ag_upenn$phc_right
+df_hc_ag_upenn$sulcus <- df_hc_ag_upenn$sulcus_left + df_hc_ag_upenn$sulcus_right
+
+# Calculate total volume
+df_hc_ag_upenn$hc_total <- df_hc_ag_upenn$dg + df_hc_ag_upenn$ca1 + df_hc_ag_upenn$ca2 + df_hc_ag_upenn$ca3 + df_hc_ag_upenn$sub + df_hc_ag_upenn$erc + df_hc_ag_upenn$phc
+
+
+# Define id vars for long format, and bdc data
+id_vars <- c("id", "time.f")
+bdc <- quote( time.f == "BDC-3" )
+
+# Run z scores
+df_hc_ag_upenn_z <- func_z(df_hc_ag_upenn)
+df_hc_ag_upenn_z <- as_tibble(df_hc_ag_upenn_z)
+```
+# Load and Preprocess AGBRESA MPI
+```{r highres HC MPI AGBRESA}
+# AGBRESA
+# MPI
+df_hc_ag_pre_post_mpi <- read.csv("/Users/astahn/Publications/AGBRESA/Data/High Res HC/20200119/_MPIB_Atlas.csv", header = TRUE, sep = ",")
+
+# Clean ID
+df_hc_ag_pre_post_mpi$ID <- gsub(".*ST_(.+)_20.*", "\\1", df_hc_ag_pre_post_mpi$ID)
+
+# Extract time
+df_hc_ag_pre_post_mpi$time.f <- df_hc_ag_pre_post_mpi$ID
+df_hc_ag_pre_post_mpi$time.f <- gsub( "_2", "", df_hc_ag_pre_post_mpi$time.f )
+df_hc_ag_pre_post_mpi$time.f <- gsub(".*_","", df_hc_ag_pre_post_mpi$time.f)
+
+# Extract ID
+df_hc_ag_pre_post_mpi$ID <- gsub( "_.*$", "", df_hc_ag_pre_post_mpi$ID ) # extract everything after _ from start
+
+# Remove duplicate rows
+df_hc_ag_pre_post_mpi <- df_hc_ag_pre_post_mpi %>% distinct()
+
+# Drop incomplete data
+df_hc_ag_pre_post_mpi <- subset(df_hc_ag_pre_post_mpi, ID != "S1")
+
+# AGBRESA MPI S1
+df_hc_ag_s1_mpi <- read.csv("/Users/astahn/Publications/AGBRESA/Data/High Res HC/20201208/_MPIB_Atlas_AGBRESA_S1.csv", header = TRUE, sep = ",")
+
+# Extract time.f
+df_hc_ag_s1_mpi$time.f <- gsub( "S1_", "", df_hc_ag_s1_mpi$ID )
+
+# Relabel time.f
+df_hc_ag_s1_mpi$time.f <- revalue(df_hc_ag_s1_mpi$time.f, c("BDC"="BDC-4"))
+
+# Extract ID
+df_hc_ag_s1_mpi$ID <- gsub( "_.*$", "", df_hc_ag_s1_mpi$ID )
+
+# AGBRESA HDT30 R+11
+df_hc_ag_30_R11_mpi <- read.csv("/Users/astahn/Publications/AGBRESA/Data/High Res HC/20200603/_MPIB_Atlas_AGBRESA_HDT30_R+11.csv", header = TRUE, sep = ",")
+df_hc_ag_30_R11_mpi <- df_hc_ag_30_R11_mpi[-c(49),] # drop empty rows
+colnames(df_hc_ag_30_R11_mpi)[2] <-  "time.f"
+
+# Drop incomplete data
+df_hc_ag_30_R11_mpi <- subset(df_hc_ag_30_R11_mpi, ID != "S1")
+
+# Combine dfs
+# Drop ICV (missing from AGBRESA HDT30 R+11, and not needed because only corrected data will be used)
+df_hc_ag_mpi <- rbind(df_hc_ag_pre_post_mpi[-c(6)], df_hc_ag_s1_mpi[-c(6)])
+df_hc_ag_mpi <- rbind(df_hc_ag_mpi, df_hc_ag_30_R11_mpi[-c(7)])
+names(df_hc_ag_mpi)
+
+# Rearrange
+df_hc_ag_mpi <- df_hc_ag_mpi[c(1,18,2:17)]
+df_hc_ag_mpi <- as_tibble(df_hc_ag_mpi)
+
+# Convert data type
+df_hc_ag_mpi[c(1:2)] <- lapply(df_hc_ag_mpi[c(1:2)], as.factor)
+
+# Clean vars
+# Convert column names to lower case
+names(df_hc_ag_mpi) <- tolower(names(df_hc_ag_mpi))
+
+# Clean 
+# Delete raw data
+df_hc_ag_mpi <- df_hc_ag_mpi[grep("raw", names(df_hc_ag_mpi), value = TRUE, invert = TRUE)]
+
+# Delete raw data mpi_usegray_corr_
+names(df_hc_ag_mpi) <- gsub("mpib_corr_usegray_", "", names(df_hc_ag_mpi))
+
+# add underline for left and
+colnames(df_hc_ag_mpi)[3] <-  "ca1_left"
+colnames(df_hc_ag_mpi)[4] <-  "dg_left"
+colnames(df_hc_ag_mpi)[5] <-  "sub_left"
+colnames(df_hc_ag_mpi)[6] <-  "erc_left"
+colnames(df_hc_ag_mpi)[7] <-  "ca1_right"
+colnames(df_hc_ag_mpi)[8] <-  "dg_right"
+colnames(df_hc_ag_mpi)[9] <-  "sub_right"
+colnames(df_hc_ag_mpi)[10] <-  "erc_right"
+
+# Calculate bilateral volumes
+df_hc_ag_mpi$dg <- df_hc_ag_mpi$dg_left + df_hc_ag_mpi$dg_right
+df_hc_ag_mpi$ca1 <- df_hc_ag_mpi$ca1_left + df_hc_ag_mpi$ca1_right
+df_hc_ag_mpi$sub <- df_hc_ag_mpi$sub_left + df_hc_ag_mpi$sub_right
+df_hc_ag_mpi$erc <- df_hc_ag_mpi$erc_left + df_hc_ag_mpi$erc_right
+
+# Calculate total volume
+df_hc_ag_mpi$hc_total <- df_hc_ag_mpi$dg + df_hc_ag_mpi$ca1 +  + df_hc_ag_mpi$sub + df_hc_ag_mpi$erc 
+
+
+# Define id vars for long format, and bdc data
+id_vars <- c("id", "time.f")
+bdc <- quote( time.f == "BDC-3" )
+
+# Run z scores
+df_hc_ag_mpi_z <- func_z(df_hc_ag_mpi)
+df_hc_ag_mpi_z <- as_tibble(df_hc_ag_mpi_z)
+```
+# Load and Preprocess RSL UPenn
+```{r highres HC UPenn RSL}
+# RSL
+
+# AGBRESA S1 and RSL  
+df_hc_rsl_and_ag_s1_upenn <- read.csv("/Users/astahn/Publications/AGBRESA/Data/High Res HC/20201208/_UPenn_Atlas_newMPI_RSL.csv", header = TRUE, sep = ",")
+
+# Clean ID
+df_hc_rsl_and_ag_s1_upenn$ID <- gsub( "-", "_", df_hc_rsl_and_ag_s1_upenn$ID )
+
+# Extract time.f
+df_hc_rsl_and_ag_s1_upenn$time.f <- df_hc_rsl_and_ag_s1_upenn$ID
+df_hc_rsl_and_ag_s1_upenn$time.f <- gsub('.{7}$', '', df_hc_rsl_and_ag_s1_upenn$time.f) #delete last 11 digits
+df_hc_rsl_and_ag_s1_upenn$time.f <- gsub( "2016_", "", df_hc_rsl_and_ag_s1_upenn$time.f )
+df_hc_rsl_and_ag_s1_upenn$time.f <- gsub(".*_(.+)_.*", "\\1", df_hc_rsl_and_ag_s1_upenn$time.f)
+
+# Extract ID
+df_hc_rsl_and_ag_s1_upenn$ID <- gsub( "_.*$", "", df_hc_rsl_and_ag_s1_upenn$ID )
+
+# Rearrange
+df_hc_rsl_and_ag_s1_upenn <- df_hc_rsl_and_ag_s1_upenn[c(1,47,2:46)]
+
+# Extract RSL
+df_hc_rsl_upenn <- subset(df_hc_rsl_and_ag_s1_upenn, ID !="S1")
+
+# Combine dfs
+# Drop ICV (because only corrected data will be used)
+df_hc_rsl_upenn <- df_hc_rsl_upenn[-c(14)]
+
+df_hc_rsl_upenn <- as_tibble(df_hc_rsl_upenn)
+
+# Convert data type
+df_hc_rsl_upenn[c(1:2)] <- lapply(df_hc_rsl_upenn[c(1:2)], as.factor)
+
+# Clean vars
+# Convert column names to lower case
+names(df_hc_rsl_upenn) <- tolower(names(df_hc_rsl_upenn))
+
+# Clean 
+# Delete raw data
+df_hc_rsl_upenn <- df_hc_rsl_upenn[grep("raw", names(df_hc_rsl_upenn), value = TRUE, invert = TRUE)]
+
+# Delete raw data upenn_usegray_corr_
+names(df_hc_rsl_upenn) <- gsub("upenn_usegray_corr_", "", names(df_hc_rsl_upenn))
+
+# Calculate bilateral volumes
+df_hc_rsl_upenn$dg <- df_hc_rsl_upenn$dg_left + df_hc_rsl_upenn$dg_right
+df_hc_rsl_upenn$ca1 <- df_hc_rsl_upenn$ca1_left + df_hc_rsl_upenn$ca1_right
+df_hc_rsl_upenn$ca2 <- df_hc_rsl_upenn$ca2_left + df_hc_rsl_upenn$ca2_right
+df_hc_rsl_upenn$ca3 <- df_hc_rsl_upenn$ca3_left + df_hc_rsl_upenn$ca3_right
+df_hc_rsl_upenn$misc <- df_hc_rsl_upenn$misc_left + df_hc_rsl_upenn$misc_right
+df_hc_rsl_upenn$sub <- df_hc_rsl_upenn$sub_left + df_hc_rsl_upenn$sub_right
+df_hc_rsl_upenn$erc <- df_hc_rsl_upenn$erc_left + df_hc_rsl_upenn$erc_right
+df_hc_rsl_upenn$ba35 <- df_hc_rsl_upenn$ba35_left + df_hc_rsl_upenn$ba35_right
+df_hc_rsl_upenn$ba36 <- df_hc_rsl_upenn$ba36_left + df_hc_rsl_upenn$ba36_right
+df_hc_rsl_upenn$phc <- df_hc_rsl_upenn$phc_left + df_hc_rsl_upenn$phc_right
+df_hc_rsl_upenn$sulcus <- df_hc_rsl_upenn$sulcus_left + df_hc_rsl_upenn$sulcus_right
+
+# Calculate total volume
+df_hc_rsl_upenn$hc_total <- df_hc_rsl_upenn$dg + df_hc_rsl_upenn$ca1 + df_hc_rsl_upenn$ca2 + df_hc_rsl_upenn$ca3 + df_hc_rsl_upenn$sub + df_hc_rsl_upenn$erc + df_hc_rsl_upenn$phc
+
+# Relabel time.f
+df_hc_rsl_upenn$time.f <- revalue(df_hc_rsl_upenn$time.f, c("BDC4"="BDC-4", "R12"="R+12", "HDT"="HDT58", "BDC"="BDC-4"))
+
+# Define id vars for long format, and bdc data
+id_vars <- c("id", "time.f")
+bdc <- quote( time.f == "BDC-4" )
+
+# Run z scores
+df_hc_rsl_upenn_z <- func_z(df_hc_rsl_upenn)
+df_hc_rsl_upenn_z <- as_tibble(df_hc_rsl_upenn_z)
+```
+# Load and Preprocess RSL MPI
+```{r highres HC MPI RSL}
+# RSL
+df_hc_rsl_mpi <- read.csv("/Users/astahn/Publications/AGBRESA/Data/High Res HC/20201208/MPIB_Atlas_RSL.csv", header = TRUE, sep = ",")
+
+df_hc_rsl_mpi <- df_hc_rsl_mpi[-c(116),] # drop empty rows
+
+# Clean ID
+df_hc_rsl_mpi$ID <- gsub("-","_", df_hc_rsl_mpi$ID)
+
+
+# Extract time.f
+df_hc_rsl_mpi$time.f <- gsub('.{8}$', '', df_hc_rsl_mpi$ID) #delete last 11 digits
+df_hc_rsl_mpi$time.f <- gsub(".*_(.+)_.*", "\\1", df_hc_rsl_mpi$time.f)
+
+# Extract ID
+df_hc_rsl_mpi$ID <- gsub( "_.*$", "", df_hc_rsl_mpi$ID )
+
+# Remove duplicate rows
+df_hc_rsl_mpi <- df_hc_rsl_mpi %>% distinct()
+
+# Reorder
+names(df_hc_rsl_mpi)
+df_hc_rsl_mpi <- df_hc_rsl_mpi[c(1, 19, 2:18)]
+
+# Drop ICV (missing from AGBRESA HDT30 R+11, and not needed because only corrected data will be used)
+df_hc_rsl_mpi <-df_hc_rsl_mpi[-c(7)]
+
+df_hc_rsl_mpi <- as_tibble(df_hc_rsl_mpi)
+
+# Convert data type
+df_hc_rsl_mpi[c(1:2)] <- lapply(df_hc_rsl_mpi[c(1:2)], as.factor)
+
+# Clean vars
+# Convert column names to lower case
+names(df_hc_rsl_mpi) <- tolower(names(df_hc_rsl_mpi))
+
+# Clean 
+# Delete raw data
+df_hc_rsl_mpi <- df_hc_rsl_mpi[grep("raw", names(df_hc_rsl_mpi), value = TRUE, invert = TRUE)]
+
+# Delete raw data mpi_usegray_corr_
+names(df_hc_rsl_mpi) <- gsub("mpib_corr_usegray_", "", names(df_hc_rsl_mpi))
+
+# add underline for left and
+colnames(df_hc_rsl_mpi)[3] <-  "ca1_left"
+colnames(df_hc_rsl_mpi)[4] <-  "dg_left"
+colnames(df_hc_rsl_mpi)[5] <-  "sub_left"
+colnames(df_hc_rsl_mpi)[6] <-  "erc_left"
+colnames(df_hc_rsl_mpi)[7] <-  "ca1_right"
+colnames(df_hc_rsl_mpi)[8] <-  "dg_right"
+colnames(df_hc_rsl_mpi)[9] <-  "sub_right"
+colnames(df_hc_rsl_mpi)[10] <-  "erc_right"
+
+# Calculate bilateral volumes
+df_hc_rsl_mpi$dg <- df_hc_rsl_mpi$dg_left + df_hc_rsl_mpi$dg_right
+df_hc_rsl_mpi$ca1 <- df_hc_rsl_mpi$ca1_left + df_hc_rsl_mpi$ca1_right
+df_hc_rsl_mpi$sub <- df_hc_rsl_mpi$sub_left + df_hc_rsl_mpi$sub_right
+df_hc_rsl_mpi$erc <- df_hc_rsl_mpi$erc_left + df_hc_rsl_mpi$erc_right
+
+# Calculate total volume
+df_hc_rsl_mpi$hc_total <- df_hc_rsl_mpi$dg + df_hc_rsl_mpi$ca1 +  + df_hc_rsl_mpi$sub + df_hc_rsl_mpi$erc 
+
+# Relabel time.f
+df_hc_rsl_mpi$time.f <- revalue(df_hc_rsl_mpi$time.f, c("BDC4"="BDC-4", "R12"="R+12", "HDT"="HDT58", "BDC"="BDC-4"))
+
+# Define id vars for long format, and bdc data
+id_vars <- c("id", "time.f")
+bdc <- quote( time.f == "BDC-4" )
+
+# Run z scores
+df_hc_rsl_mpi_z <- func_z(df_hc_rsl_mpi)
+df_hc_rsl_mpi_z <- as_tibble(df_hc_rsl_mpi_z)
+```
+# Load and Preprocess Cocktail UPenn
+```{r highres HC UPenn Cocktail}
+# Cocktail
+df_hc_cocktail_upenn <- read.csv("/Users/astahn/Publications/AGBRESA/Data/High Res HC/20201208/_UPenn_Atlas_Cocktail.csv", header = TRUE, sep = ",")
+
+# Clean ID
+df_hc_cocktail_upenn$ID <- gsub( "-", "_", df_hc_cocktail_upenn$ID )
+df_hc_cocktail_upenn$ID <-gsub('.{14}$', '', df_hc_cocktail_upenn$ID) #delete last 11 digits
+
+# Extract time.f
+df_hc_cocktail_upenn$time.f <- gsub( "_.*$", "", df_hc_cocktail_upenn$ID ) # extract everything after _ from start
+
+# Extract id
+df_hc_cocktail_upenn$ID <- gsub('BDC5_', '', df_hc_cocktail_upenn$ID) 
+df_hc_cocktail_upenn$ID <- gsub('HDT57_', '', df_hc_cocktail_upenn$ID) 
+df_hc_cocktail_upenn$ID  <- gsub( "_.*$", "", df_hc_cocktail_upenn$ID  ) # extract everything after _ from start
+
+# Drop ICV (because only corrected data will be used)
+df_hc_cocktail_upenn <- df_hc_cocktail_upenn[-c(13)]
+
+# Reorder
+names(df_hc_cocktail_upenn)
+df_hc_cocktail_upenn <- df_hc_cocktail_upenn[c(1, 46, 2:45)]
+
+df_hc_cocktail_upenn <- as_tibble(df_hc_cocktail_upenn)
+
+# Convert data type
+df_hc_cocktail_upenn[c(1:2)] <- lapply(df_hc_cocktail_upenn[c(1:2)], as.factor)
+
+# Clean vars
+# Convert column names to lower case
+names(df_hc_cocktail_upenn) <- tolower(names(df_hc_cocktail_upenn))
+
+# Clean 
+# Delete raw data
+df_hc_cocktail_upenn <- df_hc_cocktail_upenn[grep("raw", names(df_hc_cocktail_upenn), value = TRUE, invert = TRUE)]
+
+# Delete raw data upenn_usegray_corr_
+names(df_hc_cocktail_upenn) <- gsub("upenn_usegray_corr_", "", names(df_hc_cocktail_upenn))
+
+# Calculate bilateral volumes
+df_hc_cocktail_upenn$dg <- df_hc_cocktail_upenn$dg_left + df_hc_cocktail_upenn$dg_right
+df_hc_cocktail_upenn$ca1 <- df_hc_cocktail_upenn$ca1_left + df_hc_cocktail_upenn$ca1_right
+df_hc_cocktail_upenn$ca2 <- df_hc_cocktail_upenn$ca2_left + df_hc_cocktail_upenn$ca2_right
+df_hc_cocktail_upenn$ca3 <- df_hc_cocktail_upenn$ca3_left + df_hc_cocktail_upenn$ca3_right
+df_hc_cocktail_upenn$misc <- df_hc_cocktail_upenn$misc_left + df_hc_cocktail_upenn$misc_right
+df_hc_cocktail_upenn$sub <- df_hc_cocktail_upenn$sub_left + df_hc_cocktail_upenn$sub_right
+df_hc_cocktail_upenn$erc <- df_hc_cocktail_upenn$erc_left + df_hc_cocktail_upenn$erc_right
+df_hc_cocktail_upenn$ba35 <- df_hc_cocktail_upenn$ba35_left + df_hc_cocktail_upenn$ba35_right
+df_hc_cocktail_upenn$ba36 <- df_hc_cocktail_upenn$ba36_left + df_hc_cocktail_upenn$ba36_right
+df_hc_cocktail_upenn$phc <- df_hc_cocktail_upenn$phc_left + df_hc_cocktail_upenn$phc_right
+df_hc_cocktail_upenn$sulcus <- df_hc_cocktail_upenn$sulcus_left + df_hc_cocktail_upenn$sulcus_right
+
+# Calculate total volume
+df_hc_cocktail_upenn$hc_total <- df_hc_cocktail_upenn$dg + df_hc_cocktail_upenn$ca1 + df_hc_cocktail_upenn$ca2 + df_hc_cocktail_upenn$ca3 + df_hc_cocktail_upenn$sub + df_hc_cocktail_upenn$erc + df_hc_cocktail_upenn$phc
+
+# Relabel time.f
+df_hc_cocktail_upenn$time.f <- revalue(df_hc_cocktail_upenn$time.f, c("BDC5"="BDC-5", "HDT57"="HDT57"))
+
+# Define id vars for long format, and bdc data
+id_vars <- c("id", "time.f")
+bdc <- quote( time.f == "BDC-5" )
+
+# Run z scores
+df_hc_cocktail_upenn_z <- func_z(df_hc_cocktail_upenn)
+df_hc_cocktail_upenn_z <- as_tibble(df_hc_cocktail_upenn_z)
+```
+# Load and Preprocess Cocktail MPI
+```{r highres HC MPI Cocktail}
+# Cocktail
+df_hc_cocktail_mpi <- read.csv("/Users/astahn/Publications/AGBRESA/Data/High Res HC/20201208/_MPIB_Atlas_Cocktail.csv", header = TRUE, sep = ",")
+
+# Clean ID
+df_hc_cocktail_mpi$ID <- gsub( "-", "_", df_hc_cocktail_mpi$ID )
+df_hc_cocktail_mpi$ID <-gsub('.{14}$', '', df_hc_cocktail_mpi$ID) #delete last 11 digits
+
+# Extract time.f
+df_hc_cocktail_mpi$time.f <- gsub( "_.*$", "", df_hc_cocktail_mpi$ID ) # extract everything after _ from start
+
+# Extract id
+df_hc_cocktail_mpi$ID <- gsub('BDC5_', '', df_hc_cocktail_mpi$ID) 
+df_hc_cocktail_mpi$ID <- gsub('HDT57_', '', df_hc_cocktail_mpi$ID) 
+df_hc_cocktail_mpi$ID  <- gsub( "_.*$", "", df_hc_cocktail_mpi$ID  ) # extract everything after _ from start
+
+
+# Drop ICV (because only corrected data will be used)
+df_hc_cocktail_mpi <- df_hc_cocktail_mpi[-c(6)]
+
+# Reorder
+names(df_hc_cocktail_upenn)
+df_hc_cocktail_mpi <- df_hc_cocktail_mpi[c(1, 18, 2:17)]
+
+df_hc_cocktail_mpi <- as_tibble(df_hc_cocktail_mpi)
+
+# Convert data type
+df_hc_cocktail_mpi[c(1:2)] <- lapply(df_hc_cocktail_mpi[c(1:2)], as.factor)
+
+# Clean vars
+# Convert column names to lower case
+names(df_hc_cocktail_mpi) <- tolower(names(df_hc_cocktail_mpi))
+
+# Clean 
+# Delete raw data
+df_hc_cocktail_mpi <- df_hc_cocktail_mpi[grep("raw", names(df_hc_cocktail_mpi), value = TRUE, invert = TRUE)]
+
+# Delete raw data upenn_usegray_corr_
+names(df_hc_cocktail_mpi) <- gsub("mpib_corr_usegray_", "", names(df_hc_cocktail_mpi))
+
+# add underline for left and
+colnames(df_hc_cocktail_mpi)[3] <-  "ca1_left"
+colnames(df_hc_cocktail_mpi)[4] <-  "dg_left"
+colnames(df_hc_cocktail_mpi)[5] <-  "sub_left"
+colnames(df_hc_cocktail_mpi)[6] <-  "erc_left"
+colnames(df_hc_cocktail_mpi)[7] <-  "ca1_right"
+colnames(df_hc_cocktail_mpi)[8] <-  "dg_right"
+colnames(df_hc_cocktail_mpi)[9] <-  "sub_right"
+colnames(df_hc_cocktail_mpi)[10] <-  "erc_right"
+
+# Calculate bilateral volumes
+df_hc_cocktail_mpi$dg <- df_hc_cocktail_mpi$dg_left + df_hc_cocktail_mpi$dg_right
+df_hc_cocktail_mpi$ca1 <- df_hc_cocktail_mpi$ca1_left + df_hc_cocktail_mpi$ca1_right
+df_hc_cocktail_mpi$sub <- df_hc_cocktail_mpi$sub_left + df_hc_cocktail_mpi$sub_right
+df_hc_cocktail_mpi$erc <- df_hc_cocktail_mpi$erc_left + df_hc_cocktail_mpi$erc_right
+
+# Calculate total volume
+df_hc_cocktail_mpi$hc_total <- df_hc_cocktail_mpi$dg + df_hc_cocktail_mpi$ca1 +  + df_hc_cocktail_mpi$sub + df_hc_cocktail_mpi$erc 
+
+# Relabel time.f
+df_hc_cocktail_mpi$time.f <- revalue(df_hc_cocktail_mpi$time.f, c("BDC5"="BDC-5", "HDT"="HDT57"))
+
+# Define id vars for long format, and bdc data
+id_vars <- c("id", "time.f")
+bdc <- quote( time.f == "BDC-5" )
+
+# Run z scores
+df_hc_cocktail_mpi_z <- func_z(df_hc_cocktail_mpi)
+df_hc_cocktail_mpi_z <- as_tibble(df_hc_cocktail_mpi_z)
+```
 # Load and Preprocess MTR Data
-```{r mtr}
+```{r mtr AGBRESA}
 # mtr
 # Read data
 df_mtr <- read.csv("/Users/astahn/Publications/AGBRESA/Data/MTR/MT_ROis_ed.csv",header = TRUE, sep = ",")
@@ -207,182 +760,38 @@ bdc <- quote( time.f == "BDC-3" )
 df_mtr_z <- func_z(df_mtr)
 df_mtr_z <- as_tibble(df_mtr_z)
 ```
-
-# rsfmri 
-df_rsfrmi_AGvCTRL_BDC_HDT59 <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Data fMRI.xlsx", sheet = "df_rsfrmi_AGvCTRL_BDC_HDT59")
-df_rsfrmi_AGvCTRL_BDC_HDT59[c(1,2)] <- lapply(df_rsfrmi_AGvCTRL_BDC_HDT59[c(1,2)], factor)
-df_rsfrmi_cAGvsCTRL_BDC_HDT59 <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Data fMRI.xlsx", sheet = "df_rsfrmi_cAGvsCTRL_BDC_HDT59")
-df_rsfrmi_cAGvsCTRL_BDC_HDT59[c(1,2)] <- lapply(df_rsfrmi_cAGvsCTRL_BDC_HDT59[c(1,2)], factor)
-
-
-
-# Read data
-# Data bdnf
-df_bdnf <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Biomarker/TCL/BDNF data.xlsx", sheet = 1)
-df_bdnf <- df_bdnf[c(2:5)]
-df_bdnf <- df_bdnf[-c(1:2,78:81,154:157,232:235),]
-names(df_bdnf)[names(df_bdnf)=="...2"] <- "file"
-names(df_bdnf)[names(df_bdnf)=="BDNF"] <- "bdnf"
-names(df_bdnf)[names(df_bdnf)=="...4"] <- "cv_bdnf"
-names(df_bdnf)[names(df_bdnf)=="...5"] <- "comment_bdnf"
-
-# Preprocess and clean data
-df_tmp <- df_bdnf
-df_bdnf <- func_clean_var(df_tmp)
-
-# Data igf
-df_igf <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Biomarker/TCL/Stahn IGF-1 Raw Data 052721.xlsx", sheet = 1)
-df_igf <- df_igf[c(2,9)]
-df_igf <- df_igf[-c(1:2),]
-names(df_igf)[names(df_igf)=="...2"] <- "file"
-names(df_igf)[names(df_igf)=="...9"] <- "igf"
-
-# Preprocess and clean data
-df_tmp <- df_igf
-df_igf <- func_clean_var(df_igf)
-
-# Data vegf
-df_vegf <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Biomarker/TCL/VEGF-A data.xlsx", sheet = 1)
-df_vegf <- df_vegf[c(2:5)]
-df_vegf <- df_vegf[-c(1:2,78:81,154:157,232:235),]
-names(df_vegf)[names(df_vegf)=="...2"] <- "file"
-names(df_vegf)[names(df_vegf)=="VEGF-A"] <- "vegf"
-names(df_vegf)[names(df_vegf)=="...4"] <- "cv_vegf"
-names(df_vegf)[names(df_vegf)=="...5"] <- "comment_vegf"
-
-# Preprocess and clean data
-df_tmp <- df_vegf
-df_vegf <- func_clean_var(df_vegf)
-
-# Data il1b
-df_il1b <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Biomarker/TCL/il1b Data Report.xlsx", sheet = 1)
-df_il1b <- df_il1b[c(2:5)]
-df_il1b <- df_il1b[-c(1:2,78:81,154:157,232:235),]
-names(df_il1b)[names(df_il1b)=="...2"] <- "file"
-names(df_il1b)[names(df_il1b)=="IL1b"] <- "il1b"
-names(df_il1b)[names(df_il1b)=="...4"] <- "cv_il1b"
-names(df_il1b)[names(df_il1b)=="...5"] <- "comment_il1b"
-df_il1b$il1b <- gsub("[*]","",df_il1b$il1b) #remove asterisk
-
-# Preprocess and clean data
-df_tmp <- df_il1b
-df_il1b <- func_clean_var(df_il1b)
-
-
-# Data il6
-df_il6 <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Biomarker/TCL/IL6 Data Report.xlsx", sheet = 1)
-df_il6 <- df_il6[c(2:5)]
-df_il6 <- df_il6[-c(1:2,78:81,154:157,232:235),]
-names(df_il6)[names(df_il6)=="...2"] <- "file"
-names(df_il6)[names(df_il6)=="IL-6"] <- "il6"
-names(df_il6)[names(df_il6)=="...4"] <- "cv_il6"
-names(df_il6)[names(df_il6)=="...5"] <- "comment_il16"
-df_il6$il6 <- gsub("[*]","",df_il6$il6) #remove asterisk
-
-# Preprocess and clean data
-df_tmp <- df_il6
-df_il6 <- func_clean_var(df_il6)
-
-# Data tnfa
-df_tnfa <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Biomarker/TCL/TNF Report.xlsx", sheet = 1)
-df_tnfa <- df_tnfa[c(2:5)]
-df_tnfa <- df_tnfa[-c(1:2,78:81,154:157,232:235),]
-names(df_tnfa)[names(df_tnfa)=="...2"] <- "file"
-names(df_tnfa)[names(df_tnfa)=="TNF-a"] <- "tnfa"
-names(df_tnfa)[names(df_tnfa)=="...4"] <- "cv_tnfa"
-names(df_tnfa)[names(df_tnfa)=="...5"] <- "comment_tnfa"
-df_tnfa$tnfa <- gsub("[*]","",df_tnfa$tnfa) #remove asterisk
-
-# Preprocess and clean data
-df_tmp <- df_tnfa
-df_tnfa <- func_clean_var(df_tnfa)
-
-# Data nfl
-df_nfl <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Biomarker/TCL/NFL Report.xlsx", sheet = 1)
-df_nfl <- df_nfl[c(2:5)]
-df_nfl <- df_nfl[-c(1:2,78:81,154:157,232:235),]
-names(df_nfl)[names(df_nfl)=="...2"] <- "file"
-names(df_nfl)[names(df_nfl)=="Human NF-L"] <- "nfl"
-names(df_nfl)[names(df_nfl)=="...4"] <- "cv_nfl"
-names(df_nfl)[names(df_nfl)=="...5"] <- "comment_nfl"
-df_nfl$nfl <- gsub("[*]","",df_nfl$nfl) #remove asterisk
-
-# preprocess and clean data
-df_tmp <- df_nfl
-df_nfl <- func_clean_var(df_nfl)
-
-# Data cortisol
-df_cort <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Biomarker/TCL/Stahn Cortisol Raw Data 052721_cor.xlsx", sheet = 1)
-df_cort <- df_cort[c(2,9)]
-df_cort <- df_cort[-c(1:2),]
-names(df_cort)[names(df_cort)=="...2"] <- "file"
-names(df_cort)[names(df_cort)=="...9"] <- "cort"
-
-#df_cort <- df_cort[-c(299),] #delete double entry
-# preprocess and clean data
-df_tmp <- df_cort
-df_cort <- func_clean_var_cort(df_cort)
-
-# Rearrange columns
-df_cort <- df_cort[c(3,2,4,1)]
-
-
-df_cort <- as_tibble(df_cort)
-
-# Convert var types
-df_cort[c(1:3)] <- lapply(df_cort[c(1:3)], as.factor)
-df_cort[c(4)] <- lapply(df_cort[c(4)], as.numeric)
-
-```
-# Combine
-```{r combine dfs}
-df_bio_tmp <- merge(df_bdnf, df_igf, by=c("id","time.f","tod"))
-df_bio_tmp <- merge(df_bio_tmp, df_vegf, by=c("id","time.f","tod"))
-df_bio_tmp <- merge(df_bio_tmp, df_nfl, by=c("id","time.f","tod"))
-df_bio_tmp <- merge(df_bio_tmp, df_il1b, by=c("id","time.f","tod"))
-df_bio_tmp <- merge(df_bio_tmp, df_il6, by=c("id","time.f","tod"))
-df_blood <- merge(df_bio_tmp, df_tnfa, by=c("id","time.f","tod"))
-df_blood <- as_tibble(df_blood)
-```
-# Add z scores
-```{r z scores}
-# blood
-df_blood_z <- df_blood[c(1:4,7,8,11,14,17,20)]
-
-# Convert var type
-df_blood_z[c(1:3)] <- lapply(df_blood_z[c(1:3)], as.factor)
-df_blood_z[c(4:10)] <- lapply(df_blood_z[c(4:10)], as.numeric)
-df_blood_z <- as_tibble(df_blood_z)
-
-# define id vars for long format, and bdc data
-id_vars <- c('id', 'time.f', 'tod')
-bdc <- cat( c(" time.f == 'BDC-6' = | time.f == 'BDC-3' ") )
-
-# Run z scores
-df_blood_z <- func_z(df_blood_z)
-
-# cortisol
-df_cort_z <- df_cort
-
-# define id vars for long format, and bdc data
-id_vars <- c('id', 'time.f', 'tod')
-bdc <- cat( c(" time.f == 'BDC-6' = | time.f == 'BDC-3' ") )
-
-# Run z scores
-df_cort_z <- func_z(df_cort_z)
-
-df_cort_z <- as_tibble(df_cort_z)
-```
-
 # Save data
 ```{r export data}
 
-list_of_datasets <- list(   "rsfrmi AGvCTRL_BDC_HDT59" = df_rsfrmi_AGvCTRL_BDC_HDT59,
-                            "rsfrmi cAGvsCTRL_BDC_HDT59" = df_rsfrmi_cAGvsCTRL_BDC_HDT59,
+list_of_datasets <- list(   "rsfrmi AGvCTRL_BDC_HDT59" = df_rsfrmi_ag_ctrl,
+                            "rsfrmi cAGvsCTRL_BDC_HDT59" = df_rsfrmi_cag_ctrl,
+                            "rsfrmi AGvCTRL_BDC_HDT59 z" = df_rsfrmi_ag_ctrl_z,
+                            "rsfrmi cAGvsCTRL_BDC_HDT59 z" = df_rsfrmi_cag_ctrl_z,
+                            "VBM" = df_vbm,
+                            "VBM z scores" = df_vbm_z,
                             "High Res LC" = df_lc,
+                            "High Res LC z" = df_lc_z,
                             "MTR" = df_mtr,
-                            "MTR z scores" = df_mtr_z)
-                          
-write.xlsx(list_of_datasets, file = "./Data/Data rsfMRI.xlsx", overwrite = TRUE)
+                            "MTR z scores" = df_mtr_z,
+                            "HC UPenn" = df_hc_ag_upenn,
+                            "HC UPenn z" = df_hc_ag_upenn_z,
+                            "HC MPI" = df_hc_ag_mpi,
+                            "HC MPI z" = df_hc_ag_mpi_z)
 
+write.xlsx(list_of_datasets, file = "./Data/Data MRI.xlsx", overwrite = TRUE)
+
+list_of_datasets_hc <- list("AGBRESA UPenn HC" = df_hc_ag_upenn,
+                            "AGBRESA UPenn HC z" = df_hc_ag_upenn_z,
+                            "AGBRESA MPI HC" = df_hc_ag_mpi,
+                            "AGBRESA MPI HC z" = df_hc_ag_mpi_z,
+                            "RSL MPI HC" = df_hc_cocktail_mpi,
+                            "RSL MPI HC z" = df_hc_rsl_mpi_z,
+                            "RSL UPenn HC" = df_hc_rsl_upenn,
+                            "RSL UPenn HC z" = df_hc_rsl_upenn_z,
+                            "Cocktail MPI HC" = df_hc_cocktail_mpi,
+                            "Cocktail MPI HC z" = df_hc_cocktail_mpi_z,
+                            "Cocktail UPenn HC" = df_hc_cocktail_upenn,
+                            "Cocktail UPenn HC z" = df_hc_cocktail_upenn_z)
+
+write.xlsx(list_of_datasets, file = "./Data/Data HC All Bed Rest Studies.xlsx", overwrite = TRUE)                          
 ```
