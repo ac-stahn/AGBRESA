@@ -11,30 +11,14 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 ## Required Packages
 ```{r load required packages, message = FALSE}
 library(knitr) # for kable
-#library(openxlsx) # save tableone as xls; source ("./Software/R/tableone_helper_functions.R") 
 library(readxl) # read xls
-
-#library(Rmisc) # for descriptives and plots if summary is used, describe by
-#library(Hmisc)
-#library(Gmisc, verbose = FALSE)
-#library(arsenal) # for tables
-#require(survival) # ??? for tables?
-#library(tableone) # descriptive stratified by group
-#library(memisc) # for relabeling
-#library(data.table) # Print table nicely in markdown
 library(DT) # Print table nicely in markdown
 library(reshape2) # wide to long
-#library(data.table) #for converting to data table
-#library(dplyr) # means across subjects and groups, change scores; fct_relevel
-#library(quantmod) # change scores
-#library(naniar) # replace outliers with NA
-#library(berryFunctions) # for adding rows to df
 library(plyr) # ldply
 library(tidyverse) # for fct_relevel
 
 library(lme4) # for adding mixed model functions to plot
 library(lmerTest) # for adding mixed model functions to plot
-#library(purrr) # for map function
 library(emmeans) # for adding mixed model marignal means and se to plot
 library(qdapTools) # list_df2df(tbl_mm_fac_aov)
 
@@ -43,11 +27,6 @@ library(ggplot2)
 library(ggsci)
 library(scales)
 library(cowplot) # for plot_grid, combine plots using Cowplot
-#library(svglite) # save plots
-
-
-
-#options(max.print=25000)
 ```
 ## Print Session Info
 ```{r print R and package versions}
