@@ -69,12 +69,6 @@ theme_report_white  <-  theme_pubr() + theme(
                             colour = "black",
                             face = "bold") # face = "bold" 
   )
-
-#color
-#p.sut_desc <- p.sut_desc + scale_color_brewer(palette="Paired",limits = c("cAG", "iAG", "CTRL"), labels = c("cAG", "iAG", "CTRL"))+scale_fill_brewer(palette="Paired",limits = c("cAG", "iAG", "CTRL"), labels = c("cAG", "iAG", "CTRL"))
-#p.sut <- p.sut + scale_colour_manual(values = c("black", "black", "black"), labels = c("cAG", "iAG", "CTRL"))+scale_fill_brewer(palette="Paired",limits = c("cAG", "iAG", "CTRL"), labels = c("cAG", "iAG", "CTRL"))
-#p.sut_main <- p.sut_main + scale_color_brewer(palette="Paired",limits = c("cAG", "iAG", "CTRL"), labels = c("cAG", "iAG", "CTRL"))+scale_fill_brewer(palette="Paired",limits = c("cAG", "iAG", "CTRL"), labels = c("cAG", "iAG", "CTRL"))
-
 ```
 ## Load Data
 ```{r load data}
@@ -86,56 +80,22 @@ df_demo[c(1:5)] <- lapply(df_demo[c(1:5)], as.factor)
 df_sut <- read_excel("./Data/Data Spatial Cognition 1.xlsx", 
                      sheet = "Data SUT z")
 df_sut[c(1:3)] <- lapply(df_sut[c(1:3)], as.factor)
-#colnames(df_sut)[4] <- "c_rt"
-#colnames(df_sut)[5] <- "b_precision"
-#colnames(df_sut)[6] <- "a_direction"
-#colnames(df_sut)[7] <- "a_speed_z"
-#colnames(df_sut)[8] <- "b_precision_z"
-#colnames(df_sut)[9] <- "d_direction_z"
-#colnames(df_sut)[10] <- "c_eff_z"
 
 # PTO
 df_pto <- read_excel("./Data/Data Spatial Cognition 1.xlsx",
                      sheet = "Data PTO z")
 df_pto[c(1:3)] <- lapply(df_pto[c(1:3)], as.factor)
-#colnames(df_pto)[4] <- "d_rating"
-#colnames(df_pto)[5] <- "e_rt"
-#colnames(df_pto)[6] <- "b_distance_error"
-#colnames(df_pto)[7] <- "c_precision"
-#colnames(df_pto)[8] <- "a_direction"
-#colnames(df_pto)[13] <- "a_speed_z"
-#colnames(df_pto)[14] <- "b_precision_z"
-#colnames(df_pto)[15] <- "f_direction_z"
-#colnames(df_pto)[16] <- "d_distance_error_z"
-#colnames(df_pto)[17] <- "e_rating_z"
-#colnames(df_pto)[18] <- "c_eff_z"
 
 # 4MTN
 df_4mtn <- read_excel("./Data/Data Spatial Cognition 1.xlsx",
                       sheet = "Data 4MTN z")
 df_4mtn[c(1:2)] <- lapply(df_4mtn[c(1:2)], as.factor)
 df_4mtn <- as.data.frame(df_4mtn)
-#colnames(df_4mtn)[3] <- "accuracy"
-#colnames(df_4mtn)[4] <- "rt"
-#colnames(df_4mtn)[5] <- "b_accuracy_z"
-#colnames(df_4mtn)[6] <- "a_speed_z"
-#colnames(df_4mtn)[7] <- "c_eff_z"
-#df_4mtn <- df_4mtn[c(1:4,6,5,7)]
 
 # NAVIS 2D
 df_navis_2d <- read_excel("./Data/Data Spatial Cognition 1.xlsx",
                           sheet = "Data NAVIS 2D z")
 df_navis_2d[c(1:3)] <- lapply(df_navis_2d[c(1:3)], as.factor)
-#colnames(df_navis_2d)[4] <- "completion_time"
-#colnames(df_navis_2d)[7] <- "distance"
-#colnames(df_navis_2d)[10] <- "revisits"
-#colnames(df_navis_2d)[11] <- "b_accuracy_z"
-#colnames(df_navis_2d)[12] <- "a_speed_z"
-#colnames(df_navis_2d)[14] <- "c_distance_z"
-#colnames(df_navis_2d)[13] <- "f_time_to_first_revisit_z"
-#colnames(df_navis_2d)[17] <- "d_total_revisits_z"
-#colnames(df_navis_2d)[16] <- "e_total_target_visits_z"
-#df_navis_2d <- df_navis_2d[c(1:3,12,11,14,17,16,13)]
 ```
 
 # Definition of Helper Functions 
@@ -865,8 +825,6 @@ tbl_contr_emm_fac_df$Time <- rep ( c("HDT2", rep("", tmp_n_time),
                                      "R+12", rep("", tmp_n_time)),
                                    length(dvList) )
 
-#table_contrasts_emm_fac_by_time_df$Contrast <- rep(c("cAG vs. CTRL","iAG vs. CTRL", "cAG vs. iAG"), length(dvList))
-
 # Table for contrasts
 tbl_contr_emm_fac_df_pto <- tbl_contr_emm_fac_df[c(9:11, 2, 8, 5:7)]
 datatable(tbl_contr_emm_fac_df_pto, 
@@ -1000,8 +958,6 @@ tbl_contr_emm_fac_df$Condition <- rep ( c("Single",rep("", tmp_n_cond),
                                           "Multiple",rep("", tmp_n_cond),
                                           "Complex",rep("", tmp_n_cond)),
                                         length(dvList) )
-
-#table_contrasts_emm_fac_by_time_df$Contrast <- rep(c("cAG vs. CTRL","iAG vs. CTRL", "cAG vs. iAG"), length(dvList))
 
 # Table for contrasts
 tbl_contr_emm_fac_pto_main <- tbl_contr_emm_fac_df[c(8:9, 2, 7,4:6)]
