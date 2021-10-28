@@ -26,7 +26,7 @@ library(ggpubr) # for compare means, descriptives and theme_pubr
 library(ggplot2)
 library(ggsci)
 library(scales)
-library(cowplot) # for plot_grid, combine plots using Cowplot
+library(cowplot) # for plot_grid, combine plots using cowplot
 ```
 ## Print Session Info
 ```{r print R and package versions}
@@ -69,100 +69,75 @@ theme_report_white  <-  theme_pubr() + theme(
                             colour = "black",
                             face = "bold") # face = "bold" 
   )
-
-#color
-#p.sut_desc <- p.sut_desc + scale_color_brewer(palette="Paired",limits = c("cAG", "iAG", "CTRL"), labels = c("cAG", "iAG", "CTRL"))+scale_fill_brewer(palette="Paired",limits = c("cAG", "iAG", "CTRL"), labels = c("cAG", "iAG", "CTRL"))
-#p.sut <- p.sut + scale_colour_manual(values = c("black", "black", "black"), labels = c("cAG", "iAG", "CTRL"))+scale_fill_brewer(palette="Paired",limits = c("cAG", "iAG", "CTRL"), labels = c("cAG", "iAG", "CTRL"))
-#p.sut_main <- p.sut_main + scale_color_brewer(palette="Paired",limits = c("cAG", "iAG", "CTRL"), labels = c("cAG", "iAG", "CTRL"))+scale_fill_brewer(palette="Paired",limits = c("cAG", "iAG", "CTRL"), labels = c("cAG", "iAG", "CTRL"))
-
 ```
 ## Load Data
 ```{r load data}
 # Demographics
-df_demo <- read_excel("./Data/Data Demographics.xlsx", sheet = "Data Demo")
+df_demo <- read_excel("./Data/Data Demographics.xlsx",sheet = "Data Demo")
 df_demo[c(1:5)] <- lapply(df_demo[c(1:5)], as.factor)
 
 # SUT
-df_sut <- read_excel("./Data/Data Spatial Cognition 1.xlsx", 
-                     sheet = "Data SUT z")
+df_sut <- read_excel("./Data/Data Spatial Cognition 1.xlsx", sheet = "Data SUT z")
 df_sut[c(1:3)] <- lapply(df_sut[c(1:3)], as.factor)
-#colnames(df_sut)[4] <- "c_rt"
-#colnames(df_sut)[5] <- "b_precision"
-#colnames(df_sut)[6] <- "a_direction"
-#colnames(df_sut)[7] <- "a_speed_z"
-#colnames(df_sut)[8] <- "b_precision_z"
-#colnames(df_sut)[9] <- "d_direction_z"
-#colnames(df_sut)[10] <- "c_eff_z"
 
 # PTO
-df_pto <- read_excel("./Data/Data Spatial Cognition 1.xlsx",
-                     sheet = "Data PTO z")
+df_pto <- read_excel("./Data/Data Spatial Cognition 1.xlsx", sheet = "Data PTO z")
 df_pto[c(1:3)] <- lapply(df_pto[c(1:3)], as.factor)
-#colnames(df_pto)[4] <- "d_rating"
-#colnames(df_pto)[5] <- "e_rt"
-#colnames(df_pto)[6] <- "b_distance_error"
-#colnames(df_pto)[7] <- "c_precision"
-#colnames(df_pto)[8] <- "a_direction"
-#colnames(df_pto)[13] <- "a_speed_z"
-#colnames(df_pto)[14] <- "b_precision_z"
-#colnames(df_pto)[15] <- "f_direction_z"
-#colnames(df_pto)[16] <- "d_distance_error_z"
-#colnames(df_pto)[17] <- "e_rating_z"
-#colnames(df_pto)[18] <- "c_eff_z"
 
 # 4MTN
-df_4mtn <- read_excel("./Data/Data Spatial Cognition 1.xlsx",
-                      sheet = "Data 4MTN z")
+df_4mtn <- read_excel("./Data/Data Spatial Cognition 1.xlsx", sheet = "Data 4MTN z")
 df_4mtn[c(1:2)] <- lapply(df_4mtn[c(1:2)], as.factor)
 df_4mtn <- as.data.frame(df_4mtn)
-#colnames(df_4mtn)[3] <- "accuracy"
-#colnames(df_4mtn)[4] <- "rt"
-#colnames(df_4mtn)[5] <- "b_accuracy_z"
-#colnames(df_4mtn)[6] <- "a_speed_z"
-#colnames(df_4mtn)[7] <- "c_eff_z"
-#df_4mtn <- df_4mtn[c(1:4,6,5,7)]
 
 # NAVIS 2D
-df_navis_2d <- read_excel("./Data/Data Spatial Cognition 1.xlsx",
-                          sheet = "Data NAVIS 2D z")
+df_navis_2d <- read_excel("./Data/Data Spatial Cognition 1.xlsx", sheet = "Data NAVIS 2D z")
 df_navis_2d[c(1:3)] <- lapply(df_navis_2d[c(1:3)], as.factor)
-#colnames(df_navis_2d)[4] <- "completion_time"
-#colnames(df_navis_2d)[7] <- "distance"
-#colnames(df_navis_2d)[10] <- "revisits"
-#colnames(df_navis_2d)[11] <- "b_accuracy_z"
-#colnames(df_navis_2d)[12] <- "a_speed_z"
-#colnames(df_navis_2d)[14] <- "c_distance_z"
-#colnames(df_navis_2d)[13] <- "f_time_to_first_revisit_z"
-#colnames(df_navis_2d)[17] <- "d_total_revisits_z"
-#colnames(df_navis_2d)[16] <- "e_total_target_visits_z"
-#df_navis_2d <- df_navis_2d[c(1:3,12,11,14,17,16,13)]
 ```
 
 # Definition of Helper Functions 
 ## Descriptive Functions
 ```{r functions for descriptive stats}
 # Function to check data completion 
-func_data_completion <- function(x) {x %>%
-    group_by(variable) %>%
-    dplyr::summarise(
-    N = 24 * length( levels(time.f) ) * length( levels(cond.f) ),
-    n = sum( !is.na(value) ),
-                   Percent = n / N * 100
-    )
-}
-
-# Function to compute descriptives, takes 'df_tmp_long'
-func_desc_by_group_time_cond <- function(x) {x %>%
-	group_by(variable, group_3, time.f, cond.f) %>%
-	dplyr::summarise(MEAN = mean(value, na.rm=T),
-	                 SE = sd(value,na.rm=T)/sqrt(length(value)) )
+func_data_completion <- function(data, ...) {
   
+  if(!"time.f" %in% names(data)) {
+    data$time.f <- as.factor( c( rep(1, nrow(data) ) ) )
+    }
+  
+  if(!"cond.f" %in% names(data)) {
+    data$cond.f <- as.factor( c( rep(1, nrow(data) ) ) )
+    }
+  
+  data <- reshape2::melt( data, 
+                              id.vars = names( Filter(is.factor, data) )
+                              )  %>%
+  
+  group_by(variable) %>%
+  dplyr::summarise(
+      N = 24 * length( levels(time.f) ) * length( levels(cond.f) ),
+      n = sum( !is.na(value) ),
+      Percent = n / N * 100
+      )
 }
 
-func_desc_by_group_time <- function(x) {x %>%
-	group_by(variable, group_3, time.f) %>%
-	dplyr::summarise(MEAN = mean(value, na.rm=T),
-	                 SE = sd(value,na.rm=T)/sqrt(length(value)) )
+# Function to compute descriptives
+func_desc <- function(data, ...) {
+  df_tmp <- df_demo[ , !names(df_demo) %in% c("age","height", "weight")]
+  data <- merge(df_tmp, data, by = "id") #add demo
+  data <- reshape2::melt( data, 
+                              id.vars = names( Filter(is.factor, data) )
+                              )
+  groups <- enquos(...)
+  
+  result <- data %>%
+    
+    group_by(!!!groups) %>%
+    
+    dplyr::summarise(
+      MEAN = mean(value, na.rm = T),
+      SE = sd(value, na.rm = T) / sqrt(length(value) )
+      )
+  return(result)
 }
 ```
 ## Plot Functions
@@ -236,11 +211,26 @@ func_plot_bar_facet <- function(x) {func_plot_bar(x) +
 ```
 ## Functions for Mixed Models
 ```{r functions for mixed models}
+# Wrapper for appending bdc data as covariate
+func_bdc_cov <- function(data, ...) {
+  
+  df_tmp <- subset(data, time.f != bdc)
+  
+  df_tmp_pre <- subset(data, time.f == bdc) %>%
+    rename_at(vars(contains("_z")), ~ str_c("pre_", .)) %>%
+    select("id" | is.numeric)
+  
+  df_tmp <- merge(df_tmp_pre, df_tmp, by = "id")
+  droplevels(df_tmp)
+  
+  df_tmp <- merge(df_demo, df_tmp,by  = c("id")) 
+}
+
 # Wrapper for mixed models, takes 'dvList', requires 'model_mm', e.g., model_mm <- paste0(" + sex"," + age", " + time.f",  " * group_3", " * cond.f", " + (1|id)" )
 func_mm_fac_with_bdc_adj_help <- function(dvList) {
   map(dvList, function(i) {
     lmerTest::lmer(paste0(i, " ~ pre_", i, model_mm),
-                   REML=T,
+                   REML = T,
                    data = df_tmp)
    }) %>% setNames(dvList) #add dvList names
 }
@@ -311,30 +301,16 @@ func_tbl_contr_emm_fac_with_bdc_adj <- function(dvList) {
 # Data Completion Check
 ```{r descriptive summaries for completed (missing) data}
 # SUT
-df_tmp <- df_sut
-names(df_tmp)[names(df_tmp) == "sut_cond.f"] <- "cond.f"
-df_tmp <- melt(df_tmp, id.vars=c("id", "time.f", "cond.f"))
-
-missing_sut <- func_data_completion(df_tmp)
+missing_sut <- func_data_completion(df_sut)
 
 # 4MTN
-df_tmp <- df_4mtn
-df_tmp$cond.f <- as.factor( c( rep(1, nrow(df_tmp) ) ) )
-df_tmp <- melt(df_tmp, id.vars=c("id", "time.f", "cond.f"))
-
-missing_4mtn <- func_data_completion(df_tmp)
+missing_4mtn <- func_data_completion(df_4mtn)
 
 # PTO
-df_tmp <- df_pto
-names(df_tmp)[names(df_tmp) == "pto_cond.f"] <- "cond.f"
-df_tmp <- melt(df_tmp, id.vars=c("id", "time.f", "cond.f"))
-missing_pto <- func_data_completion(df_tmp)
+missing_pto <- func_data_completion(df_pto)
 
 # NAVIS 2D
-df_tmp <- df_navis_2d
-names(df_tmp)[names(df_tmp) == "navis_2d_cond.f"] <- "cond.f"
-df_tmp <- melt(df_tmp, id.vars=c("id", "time.f", "cond.f"))
-missing_navis_2d <- func_data_completion(df_tmp)
+missing_navis_2d <- func_data_completion(df_navis_2d)
 
 # Combine summary
 spat_bat_1_summary <- bind_rows(missing_sut[1,], 
@@ -354,20 +330,17 @@ colnames(spat_bat_1_summary)[4] <- "Completed (%)"
 spat_bat_1_summary <- as.data.frame(spat_bat_1_summary)
 
 datatable(spat_bat_1_summary) %>%
-    formatRound(columns=c("Completed (%)"), digits = 1)
+    formatRound(columns = c("Completed (%)"), digits = 1)
 ```
 # Spatial Updating Task
 ## Plot Time Course adjusted for Baseline 
 ```{r plot time course adjusted for baseline SUT}
 # Plot arithmetic means
-df_tmp <- merge(df_demo, df_sut, by = c("id")) #add demo
-names(df_tmp)[names(df_tmp) == "sut_cond.f"] <- "cond.f"
-
-# Convert to long
-df_tmp_long = reshape2::melt(df_tmp[-c(11)], id.vars = names(df_tmp)[c(1:10)])
-                              
 # Compute desc
-desc <- func_desc_by_group_time_cond(df_tmp_long)
+desc <- func_desc(df_sut, group_3, time.f, cond.f, variable)
+
+# Drop vars
+desc <- subset(desc, variable != "direction_z")
 
 # Plot desc 
 # New facet label names for variable
@@ -410,17 +383,9 @@ p.sut_desc <- p.sut_desc + theme(legend.key.size = unit(0.3, "cm"))
 
 ## Mixed Model Time x Group Interaction 
 ```{r mixed model for time x group SUT}
-df_tmp <- df_sut
 # Add baseline as cov
-df_tmp_pre <- subset(df_tmp, time.f =="BDC-3")
-colnames(df_tmp_pre)[c(4:ncol(df_tmp_pre))] <- paste("pre", colnames(df_tmp_pre)[c(4:ncol(df_tmp_pre))], 
-                                                     sep = "_")
-df_tmp <- merge(df_tmp, df_tmp_pre[c(1, 4:7)], by = "id")
-
-df_tmp <- subset(df_tmp, time.f !="BDC-3") # Drop baseline
-df_tmp <- droplevels(df_tmp)
-df_tmp <- merge(df_demo, df_tmp,by = c("id")) # Add demo
-names(df_tmp)[names(df_tmp) == "sut_cond.f"] <- "cond.f"
+bdc <- "BDC-3"
+df_tmp <-  func_bdc_cov(df_sut)
 
 # Select dep vars
 dvList <- c("rt_z","variable_pointing_error_z", "eff_z")
@@ -461,8 +426,8 @@ datatable(tbl_mm_fac_aov_df_sut,
           rownames = FALSE, filter = "top",
           options = list(pageLength = 50, 
                          scrollX = T)) %>%
-  formatRound(columns=c("P"), digits = 3) %>%
-  formatRound(columns=c("df2", "F"), digits = 1)
+  formatRound(columns = c("P"), digits = 3) %>%
+  formatRound(columns = c("df2", "F"), digits = 1)
 ```
 ## Contrasts for Comparing Groups at Each Time Point During Bed Rest
 ```{r contrasts for groups by time SUT}
@@ -511,8 +476,8 @@ datatable(tbl_contr_emm_fac_df_sut,
           rownames = FALSE, filter = "top",
           options = list(pageLength = 50, 
                          scrollX = T)) %>%
-  formatRound(columns=c("P (unadjusted)"), digits = 3) %>%
-  formatRound(columns=c("df", "t"), digits = 1)
+  formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
+  formatRound(columns = c("df", "t"), digits = 1)
 ```
 ## Plot Estimated Marignal Means To Show Time Course for Each Group
 ```{r plot emmeans for groups by time SUT}
@@ -648,8 +613,8 @@ datatable(tbl_contr_emm_fac_sut_main,
           rownames = FALSE, filter = "top",
           options = list(pageLength = 50, 
                          scrollX = T)) %>%
-  formatRound(columns=c("P (unadjusted)"), digits = 3) %>%
-  formatRound(columns=c("df", "t"), digits = 1)
+  formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
+  formatRound(columns = c("df", "t"), digits = 1)
 ```
 ## Plot Estimated Marignal Means for Comparing Groups
 ```{r plot groups SUT}
@@ -720,14 +685,9 @@ print(p.sut_comb)
 ## Show Time Course adjusted for Baseline 
 ```{r plot time course adjusted for baseline PTO}
 # Plot arithmetic means
-df_tmp <- merge(df_demo,df_pto, by = c("id")) #add demo
-names(df_tmp)[names(df_tmp) == "pto_cond.f"] <- "cond.f"
 
-# Convert to long
-df_tmp_long = reshape2::melt(df_tmp, id.vars = names(df_tmp)[c(1:10)])
-                              #arrange in 'full' long format (AND subset to specific time points) 
 # Compute desc
-desc <- func_desc_by_group_time_cond(df_tmp_long)
+desc <- func_desc(df_pto, group_3, time.f, cond.f, variable)
 
 # Drop vars
 desc <- subset(desc, variable != "rating_z" & variable != "direction_z")
@@ -772,18 +732,9 @@ p.pto_desc <- p.pto_desc + theme(legend.key.size = unit(0.3, "cm"))
 ```
 ## Mixed Model Time x Group Interaction 
 ```{r mixed model for time x group PTO}
-df_tmp <- df_pto
 # Add baseline as cov
-df_tmp_pre <- subset(df_tmp, time.f =="BDC-3")
-
-colnames(df_tmp_pre)[c(4:ncol(df_tmp_pre))] <- paste("pre", colnames(df_tmp_pre)[c(4:ncol(df_tmp_pre))],
-                                                     sep = "_")
-df_tmp <- merge(df_tmp, df_tmp_pre[c(1,4:9)], by = "id")
-
-df_tmp <- subset(df_tmp, time.f !="BDC-3") # Drop baseline
-df_tmp <- droplevels(df_tmp)
-df_tmp <- merge(df_demo, df_tmp,by =c("id")) # Add demo
-names(df_tmp)[names(df_tmp) == "pto_cond.f"] <- "cond.f"
+bdc <- "BDC-3"
+df_tmp <-  func_bdc_cov(df_pto)
 
 # Select dep vars
 dvList <- c("rt_z","variable_pointing_error_z","eff_z", "dist_error_z")
@@ -824,8 +775,8 @@ datatable(tbl_mm_fac_aov_df_pto,
           rownames = FALSE, filter = "top",
           options = list(pageLength = 50, 
                          scrollX = T)) %>%
-  formatRound(columns=c("P"), digits = 3) %>%
-  formatRound(columns=c("df2", 'F'), digits = 1)
+  formatRound(columns = c("P"), digits = 3) %>%
+  formatRound(columns = c("df2", 'F'), digits = 1)
 ```
 ## Contrasts for Comparing Groups at Each Time Point
 ```{r emmeans for groups by time PTO}
@@ -865,16 +816,14 @@ tbl_contr_emm_fac_df$Time <- rep ( c("HDT2", rep("", tmp_n_time),
                                      "R+12", rep("", tmp_n_time)),
                                    length(dvList) )
 
-#table_contrasts_emm_fac_by_time_df$Contrast <- rep(c("cAG vs. CTRL","iAG vs. CTRL", "cAG vs. iAG"), length(dvList))
-
 # Table for contrasts
 tbl_contr_emm_fac_df_pto <- tbl_contr_emm_fac_df[c(9:11, 2, 8, 5:7)]
 datatable(tbl_contr_emm_fac_df_pto, 
           rownames = FALSE, filter = "top",
           options = list(pageLength = 50, 
                          scrollX = T)) %>%
-  formatRound(columns=c("P (unadjusted)"), digits = 3) %>%
-  formatRound(columns=c("df", "t"), digits = 1)
+  formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
+  formatRound(columns = c("df", "t"), digits = 1)
 ```
 ## Plot Estimated Marignal Means To Show Time Course for Each Group
 ```{r plot emmeans for groups by time PTO}
@@ -964,8 +913,8 @@ datatable(tbl_mm_fac_aov_df_pto_main,
           rownames = FALSE, filter = "top",
           options = list(pageLength = 50, 
                          scrollX = T)) %>%
-  formatRound(columns=c("P"), digits = 3) %>%
-  formatRound(columns=c("df2", "F"), digits = 1)
+  formatRound(columns = c("P"), digits = 3) %>%
+  formatRound(columns = c("df2", "F"), digits = 1)
 ```
 ##Contrasts for Comparing Groups
 ```{r contrasts for groups PTO}
@@ -1001,8 +950,6 @@ tbl_contr_emm_fac_df$Condition <- rep ( c("Single",rep("", tmp_n_cond),
                                           "Complex",rep("", tmp_n_cond)),
                                         length(dvList) )
 
-#table_contrasts_emm_fac_by_time_df$Contrast <- rep(c("cAG vs. CTRL","iAG vs. CTRL", "cAG vs. iAG"), length(dvList))
-
 # Table for contrasts
 tbl_contr_emm_fac_pto_main <- tbl_contr_emm_fac_df[c(8:9, 2, 7,4:6)]
 
@@ -1011,8 +958,8 @@ datatable(tbl_contr_emm_fac_pto_main,
           rownames = FALSE, filter = "top",
           options = list(pageLength = 50, 
                          scrollX = T)) %>%
-  formatRound(columns=c("P (unadjusted)"), digits = 3) %>%
-  formatRound(columns=c("df", "t"), digits = 1)
+  formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
+  formatRound(columns = c("df", "t"), digits = 1)
 ```
 ## Plot Estimated Marignal Means to Compare Groups
 ```{r plot groups PTO}
@@ -1082,16 +1029,20 @@ print(p.pto_comb)
 ## Plot Time Course adjusted for Baseline 
 ```{r plot time course adjusted for baseline NAVIS 2D}
 # Plot arithmetic means
-df_tmp <- merge(df_demo, df_navis_2d, by =c("id")) #add demo
-names(df_tmp)[names(df_tmp) == "navis_2d_cond.f"] <- "cond.f"
-
-# Convert to long
-df_tmp_long = reshape2::melt(df_tmp, id.vars = names(df_tmp)[c(1:10)])
-                              #arrange in 'full' long format (AND subset to specific time points) 
 # Compute desc
-desc <- func_desc_by_group_time_cond(df_tmp_long)
+desc <- func_desc(df_navis_2d, group_3, time.f, cond.f, variable)
 
-desc <- subset(desc, variable != "total_target_visits_z" & variable != "time_to_first_revisit_z")
+# Drop vars
+desc <- subset(desc, variable != "total_target_visits_z" &
+                 variable != "time_to_first_revisit_z" &
+                 variable != "eff_totdistance_z" &
+                 variable != "eff_totrevists_z" &
+                 variable != "eff_totrevists_z" &
+                 variable != "eff_acc_z")
+
+
+#eff_totdistance_z
+#eff_totrevists_z
 
 # Plot desc 
 # New facet label names for variable
@@ -1134,18 +1085,9 @@ p.navis_2d_desc <- p.navis_2d_desc + theme(legend.key.size = unit(0.3, "cm"))
 ```
 ## Mixed Model Time x Group Interaction 
 ```{r mixed model time x group NAVIS 2D}
-df_tmp <- df_navis_2d
 # Add baseline as cov
-df_tmp_pre <- subset(df_tmp, time.f =="BDC-3")
-names(df_tmp_pre)
-colnames(df_tmp_pre)[c(4:ncol(df_tmp_pre))] <- paste("pre", colnames(df_tmp_pre)[c(4:ncol(df_tmp_pre))],
-                                                     sep = "_")
-df_tmp <- merge(df_tmp[c(1:9)], df_tmp_pre[c(1,4:9)], by = "id")
-
-df_tmp <- subset(df_tmp, time.f !="BDC-3") # Drop baseline
-df_tmp <- droplevels(df_tmp)
-df_tmp <- merge(df_demo, df_tmp,by =c("id")) # Add demo
-names(df_tmp)[names(df_tmp) == "navis_2d_cond.f"] <- "cond.f"
+bdc <- "BDC-3"
+df_tmp <-  func_bdc_cov(df_navis_2d)
 
 # Select dep vars
 dvList <- c("rt_z","acc_z","total_distance_z","total_revisits_z")
@@ -1187,8 +1129,8 @@ datatable(tbl_mm_fac_aov_df_navis_2d,
           rownames = FALSE, filter = "top",
           options = list(pageLength = 50, 
                          scrollX = T)) %>%
-  formatRound(columns=c("P"), digits = 3) %>%
-  formatRound(columns=c("df2", 'F'), digits = 1)
+  formatRound(columns = c("P"), digits = 3) %>%
+  formatRound(columns = c("df2", 'F'), digits = 1)
 ```
 ##Contrasts for Comparing Groups at Each Time Point
 ```{r contrast for groups by time NAVIS 2D}
@@ -1236,8 +1178,8 @@ datatable(tbl_contr_emm_fac_df_navis_2d,
           rownames = FALSE, filter = "top",
           options = list(pageLength = 50, 
                          scrollX = T)) %>%
-  formatRound(columns=c("P (unadjusted)"), digits = 3) %>%
-  formatRound(columns=c("df", "t"), digits = 1)
+  formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
+  formatRound(columns = c("df", "t"), digits = 1)
 ```
 ## Plot Estimated Marignal Means To Show Time Course for Each Group
 ```{r plot groups by time NAVIS 2D}
@@ -1327,8 +1269,8 @@ datatable(tbl_mm_fac_aov_df_navis_2d_main,
           rownames = FALSE, filter = "top",
           options = list(pageLength = 50, 
                          scrollX = T)) %>%
-  formatRound(columns=c("P"), digits = 3) %>%
-  formatRound(columns=c("df2", 'F'), digits = 1)
+  formatRound(columns = c("P"), digits = 3) %>%
+  formatRound(columns = c("df2", 'F'), digits = 1)
 ```
 ## Compute Contrasts for Comparing Groups
 ```{r contrasts for groups NAVIS 2D}
@@ -1373,8 +1315,8 @@ datatable(tbl_contr_emm_fac_navis_2d_main,
           rownames = FALSE, filter = "top",
           options = list(pageLength = 50, 
                          scrollX = T)) %>%
-  formatRound(columns=c("P (unadjusted)"), digits = 3) %>%
-  formatRound(columns=c("df", "t"), digits = 1)
+  formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
+  formatRound(columns = c("df", "t"), digits = 1)
 ```
 ## Plot Estimated Marignal Means for Group Comparisons
 ```{r plot groups NAVIS 2D}
@@ -1445,13 +1387,10 @@ print(p.navis_2d_comb)
 ## Plot Time Course adjusted for Baseline 
 ```{r plot time course adjusted for baseline 4MTN}
 # Plot arithmetic means
-df_tmp <- merge(df_demo, df_4mtn, by =c("id")) #add demo
-
-# Convert to long
-df_tmp_long = reshape2::melt(df_tmp, id.vars = names(df_tmp)[c(1:9)])
 
 # Compute desc
-desc <- func_desc_by_group_time(df_tmp_long)
+desc <- func_desc(df_4mtn, group_3, time.f, variable)
+
 
 # Plot desc 
 # New facet label names for variable
@@ -1487,16 +1426,9 @@ p.4mtn_desc <- p.4mtn_desc + geom_hline(yintercept = 0, size = 0.3, linetype = "
 ```
 ## Mixed Model Time in Bed Rest x Group Interaction 
 ```{r mixed model for time x group 4MTN}
-df_tmp <- df_4mtn
 # Add baseline as cov
-df_tmp_pre <- subset(df_tmp, time.f =="BDC-3")
-names(df_tmp_pre)
-colnames(df_tmp_pre)[c(3:ncol(df_tmp_pre))] <- paste("pre", colnames(df_tmp_pre)[c(3:ncol(df_tmp_pre))], sep = "_")
-df_tmp <- merge(df_tmp, df_tmp_pre[c(1,3:5)], by = "id")
-
-df_tmp <- subset(df_tmp, time.f !="BDC-3") # Drop baseline
-df_tmp <- droplevels(df_tmp)
-df_tmp <- merge(df_demo, df_tmp,by =c("id")) # Add demo
+bdc <- "BDC-3"
+df_tmp <-  func_bdc_cov(df_4mtn)
 
 # Select dep vars
 dvList <- c("rt_z","acc_z","eff_z")
@@ -1533,8 +1465,8 @@ datatable(tbl_mm_fac_aov_df_4mtn,
           rownames = FALSE, filter = "top",
           options = list(pageLength = 50, 
                          scrollX = T)) %>%
-  formatRound(columns=c("P"), digits = 3) %>%
-  formatRound(columns=c("df2", 'F'), digits = 1)
+  formatRound(columns = c("P"), digits = 3) %>%
+  formatRound(columns = c("df2", 'F'), digits = 1)
 ```
 ## Contrasts for Comparing Groups at Each Time Point
 ```{r constrasts for groups by time 4MTN}
@@ -1577,8 +1509,8 @@ datatable(tbl_contr_emm_fac_df_4mtn,
           rownames = FALSE, filter = "top",
           options = list(pageLength = 50, 
                          scrollX = T)) %>%
-  formatRound(columns=c("P (unadjusted)"), digits = 3) %>%
-  formatRound(columns=c("df", "t"), digits = 1)
+  formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
+  formatRound(columns = c("df", "t"), digits = 1)
 ```
 ## Plot Estimated Marignal Means To Show Time Course for Each Group
 ```{r plot groups by time 4MTN}
@@ -1661,8 +1593,8 @@ datatable(tbl_mm_fac_aov_df_4mtn_main,
           rownames = FALSE, filter = "top",
           options = list(pageLength = 50, 
                          scrollX = T)) %>%
-  formatRound(columns=c("P"), digits = 3) %>%
-  formatRound(columns=c("df2", 'F'), digits = 1)
+  formatRound(columns = c("P"), digits = 3) %>%
+  formatRound(columns = c("df2", 'F'), digits = 1)
 ```
 ## Contrasts for Group Comparisons
 ```{r contrasts for groups 4MTN}
@@ -1699,8 +1631,8 @@ datatable(tbl_contr_emm_fac_4mtn_main,
           rownames = FALSE, filter = "top",
           options = list(pageLength = 50, 
                          scrollX = T)) %>%
-  formatRound(columns=c("P (unadjusted)"), digits = 3) %>%
-  formatRound(columns=c("df", "t"), digits = 1)
+  formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
+  formatRound(columns = c("df", "t"), digits = 1)
 ```
 ## Plot Estimated Marignal Means fro Group Comparisons
 ```{r plot groups 4MTN}
