@@ -52,12 +52,12 @@ theme_report_white  <-  theme_pubr() + theme(
                            family = "Helvetica",
                            colour = "black"), #face="bold"
   axis.text.y = element_text(angle = 0,
-                            vjust=0.5,
+                            vjust = 0.5,
                             size= 8 * ggplot_factor_font,
                             family = "Helvetica",
                             colour="black"),
   axis.title.x = element_text(angle = 0,
-                            vjust =0.5,
+                            vjust = 0.5,
                             size= 8 * ggplot_factor_font,
                             family="Helvetica",
                             colour="black",
@@ -328,10 +328,15 @@ colnames(spat_bat_1_summary)[2] <- "Expected (N)"
 colnames(spat_bat_1_summary)[3] <- "Completed (N)"
 colnames(spat_bat_1_summary)[4] <- "Completed (%)"
 spat_bat_1_summary <- as.data.frame(spat_bat_1_summary)
-
-datatable(spat_bat_1_summary) %>%
-    formatRound(columns = c("Completed (%)"), digits = 1)
 ```
+#### Table 1. Data collection summary Spatial Cognition 1.
+```{r echo = FALSE}
+datatable(spat_bat_1_summary) %>%
+    formatRound(columns=c("Completed (%)"), digits = 1)
+
+round(mean(spat_bat_1_summary$'Completed (%)'), 1)
+```
+
 # Spatial Updating Task
 ## Plot Time Course adjusted for Baseline 
 ```{r plot time course adjusted for baseline SUT}
@@ -371,7 +376,8 @@ facet_grid_def <- facet_grid(variable ~ cond.f,
 # Draw plot
 pd <- position_dodge(0.3)
 p.sut_desc <- func_plot_line_facet(desc %>%
-                                     mutate(variable = fct_relevel(variable, "rt_z","variable_pointing_error_z", "eff_z"),
+                                     mutate(time.f = fct_relevel(time.f, "BDC-3", "HDT2", "HDT30", "HDT59", "R+12"),
+                                            variable = fct_relevel(variable, "rt_z","variable_pointing_error_z", "eff_z"),
                                             group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
 
 # Add zero line
@@ -420,7 +426,9 @@ Parameter <- Parameter_func(dvList)
 blanks <- rep("", length(Parameter) / length(dvList) - 1)
 Variable <- c("Speed", blanks,"Precision", blanks, "Efficiency", blanks)
 tbl_mm_fac_aov_df_sut <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
-
+```
+#### Table 2. Mixed Model Summary for Spatial Updating Task.
+```{r echo = FALSE}
 # Print table
 datatable(tbl_mm_fac_aov_df_sut, 
           rownames = FALSE, filter = "top",
@@ -470,8 +478,10 @@ tbl_contr_emm_fac_df$Time <- rep ( c("HDT2", rep("", tmp_n_time),
 
 # Ttble for contrasts
 tbl_contr_emm_fac_df_sut <- tbl_contr_emm_fac_df[c(9:11, 2, 8, 5:7)]
-
-# print table
+```
+#### Table 3. Mixed Model Group Contrasts for Spatial Updating Task.
+```{r echo = FALSE}
+# Print table 
 datatable(tbl_contr_emm_fac_df_sut, 
           rownames = FALSE, filter = "top",
           options = list(pageLength = 50, 
@@ -516,9 +526,9 @@ facet_grid_def <- facet_grid(.id ~ cond.f,
 # Draw plot
 pd <- position_dodge(0.3)
 p.sut_emmeans <- func_plot_line_facet(emm_fac %>%
-                                        mutate(
-                                          .id = fct_relevel(.id, "rt_z","variable_pointing_error_z", "eff_z"),
-                                          group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
+                                        mutate(time.f = fct_relevel(time.f, "BDC-3", "HDT2", "HDT30", "HDT59", "R+12"),
+                                               .id = fct_relevel(.id, "rt_z","variable_pointing_error_z", "eff_z"),
+                                               group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
 
 # Add zero line
 p.sut_emmeans <- p.sut_emmeans + geom_hline(yintercept = 0, size = 0.3, linetype = "dotted")
@@ -561,7 +571,9 @@ Parameter <- Parameter_func(dvList)
 blanks <- rep("", length(Parameter) / length(dvList) - 1)
 Variable <- c("Speed", blanks,"Precision", blanks, "Efficiency", blanks)
 tbl_mm_fac_aov_df_sut_main <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
-
+```
+#### Table 4. Mixed Model Summary testing the Main Effect of Group for Spatial Updating Task.
+```{r echo = FALSE}
 # Print table
 datatable(tbl_mm_fac_aov_df_sut_main, 
           rownames = FALSE, filter = "top",
@@ -570,6 +582,7 @@ datatable(tbl_mm_fac_aov_df_sut_main,
   formatRound(columns = c("P"), digits = 3) %>%
   formatRound(columns = c("df2", "F"), digits = 1)
 ```
+
 ## Contrasts for Comparing Groups
 ```{r contrasts for groups SUT}
 # Define model for emmeans
@@ -607,7 +620,9 @@ tbl_contr_emm_fac_df$Condition <- rep ( c("Static",rep("", tmp_n_cond),
 
 # Table for contrasts
 tbl_contr_emm_fac_sut_main <- tbl_contr_emm_fac_df[c(8:9, 2, 7,4:6)]
-
+```
+#### Table 5. Mixed Model Contrasts Comparing Groups for Spatial Updating Task.
+```{r echo = FALSE}
 # Print table
 datatable(tbl_contr_emm_fac_sut_main, 
           rownames = FALSE, filter = "top",
@@ -616,6 +631,7 @@ datatable(tbl_contr_emm_fac_sut_main,
   formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
   formatRound(columns = c("df", "t"), digits = 1)
 ```
+
 ## Plot Estimated Marignal Means for Comparing Groups
 ```{r plot groups SUT}
 # New facet label names for variable
@@ -652,8 +668,9 @@ facet_grid_def <- facet_grid(.id ~ cond.f,
 # Draw Plot 
 pd <- position_dodge(0.99)
 p.sut_emmeans_main <- func_plot_bar_facet(emm_fac %>%
-                                            mutate(.id = fct_relevel(.id, "rt_z","variable_pointing_error_z", "eff_z"),
-                                            group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG"))) 
+                                            mutate(
+                                                   .id = fct_relevel(.id, "rt_z","variable_pointing_error_z", "eff_z"),
+                                                   group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG"))) 
 # Adjust legend size
 p.sut_emmeans_main <- p.sut_emmeans_main + theme(legend.key.size = unit(0.3, "cm"))
 ```
@@ -677,7 +694,8 @@ pdf("./Figures/Spatial Cognition 1/p.sut_comb.pdf",
 print(p.sut_comb)
 dev.off()
 ```
-```{r, echo = FALSE, fig.width = 10, fig.height = 8, fig.cap="Figure SUT: (a) Time course of speed, precision, and efficiency before, during, and after bed rest. (b) Main effect of bed rest. Data are adjusted for baseline."}
+#### Figure 1. Spatial Updating Task: (a) Time course of speed, precision, and efficiency before, during, and after bed rest. (b) Main effect of bed rest. Data are means and SD adjusted for baseline.
+```{r, echo = FALSE, fig.width = 10, fig.height = 8, fig.cap = ""}
 print(p.sut_comb)
 ```
 
@@ -721,7 +739,8 @@ facet_grid_def <- facet_grid(variable ~ cond.f,
 # Draw plot
 pd <- position_dodge(0.3)
 p.pto_desc <- func_plot_line_facet(desc %>%
-                                     mutate(variable = fct_relevel(variable, "rt_z", "variable_pointing_error_z", "eff_z", "dist_error_z"),
+                                     mutate(time.f = fct_relevel(time.f, "BDC-3", "HDT2", "HDT30", "HDT59", "R+12"),
+                                            variable = fct_relevel(variable, "rt_z", "variable_pointing_error_z", "eff_z", "dist_error_z"),
                                             group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
 
 # Add zero line
@@ -769,7 +788,9 @@ Parameter <- Parameter_func(dvList)
 blanks <- rep("", length(Parameter) / length(dvList) - 1)
 Variable <- c("Speed", blanks,"Precision", blanks, "Efficiency", blanks, "Distance Est.", blanks)
 tbl_mm_fac_aov_df_pto <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
-
+```
+#### Table 6. Mixed Model Summary for Point to Oriign Task.
+```{r echo = FALSE}
 # Print table
 datatable(tbl_mm_fac_aov_df_pto, 
           rownames = FALSE, filter = "top",
@@ -778,6 +799,7 @@ datatable(tbl_mm_fac_aov_df_pto,
   formatRound(columns = c("P"), digits = 3) %>%
   formatRound(columns = c("df2", 'F'), digits = 1)
 ```
+
 ## Contrasts for Comparing Groups at Each Time Point
 ```{r emmeans for groups by time PTO}
 # Contrasts
@@ -815,7 +837,9 @@ tbl_contr_emm_fac_df$Time <- rep ( c("HDT2", rep("", tmp_n_time),
                                      "HDT59", rep("", tmp_n_time),
                                      "R+12", rep("", tmp_n_time)),
                                    length(dvList) )
-
+```
+#### Table 7. Mixed Model Group Contrasts for Point to Oriign Task.
+```{r echo = FALSE}
 # Table for contrasts
 tbl_contr_emm_fac_df_pto <- tbl_contr_emm_fac_df[c(9:11, 2, 8, 5:7)]
 datatable(tbl_contr_emm_fac_df_pto, 
@@ -825,6 +849,7 @@ datatable(tbl_contr_emm_fac_df_pto,
   formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
   formatRound(columns = c("df", "t"), digits = 1)
 ```
+
 ## Plot Estimated Marignal Means To Show Time Course for Each Group
 ```{r plot emmeans for groups by time PTO}
 # Define model for emmeans
@@ -862,9 +887,9 @@ facet_grid_def <- facet_grid(.id ~ cond.f,
 # Draw plot
 pd <- position_dodge(0.3)
 p.pto_emmeans <- func_plot_line_facet(emm_fac %>%
-                                        mutate(
-                                          .id = fct_relevel(.id, "rt_z", "variable_pointing_error_z", "eff_z", "dist_error_z"),
-                                          group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
+                                        mutate(time.f = fct_relevel(time.f, "BDC-3", "HDT2", "HDT30", "HDT59", "R+12"),
+                                               .id = fct_relevel(.id, "rt_z", "variable_pointing_error_z", "eff_z", "dist_error_z"),
+                                               group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
 
 # Add zero line
 p.pto_emmeans <- p.pto_emmeans + geom_hline(yintercept = 0, size = 0.3, linetype = "dotted")
@@ -907,7 +932,9 @@ Parameter <- Parameter_func(dvList)
 blanks <- rep("", length(Parameter) / length(dvList) - 1)
 Variable <- c("Speed", blanks,"Precision", blanks, "Efficiency", blanks, "Distance Est.", blanks)
 tbl_mm_fac_aov_df_pto_main <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
-
+```
+#### Table 8. Mixed Model Summary testing the Main Effect of Group for Point to Oriign Task.
+```{r echo = FALSE}
 # Print ANOVA table
 datatable(tbl_mm_fac_aov_df_pto_main, 
           rownames = FALSE, filter = "top",
@@ -916,6 +943,7 @@ datatable(tbl_mm_fac_aov_df_pto_main,
   formatRound(columns = c("P"), digits = 3) %>%
   formatRound(columns = c("df2", "F"), digits = 1)
 ```
+
 ##Contrasts for Comparing Groups
 ```{r contrasts for groups PTO}
 # Define model for emmeans
@@ -952,7 +980,9 @@ tbl_contr_emm_fac_df$Condition <- rep ( c("Single",rep("", tmp_n_cond),
 
 # Table for contrasts
 tbl_contr_emm_fac_pto_main <- tbl_contr_emm_fac_df[c(8:9, 2, 7,4:6)]
-
+```
+#### Table 9. Mixed Model Contrasts Comparing Groups for Point to Oriign Task.
+```{r echo = FALSE}
 # Print Contrast table
 datatable(tbl_contr_emm_fac_pto_main, 
           rownames = FALSE, filter = "top",
@@ -961,6 +991,7 @@ datatable(tbl_contr_emm_fac_pto_main,
   formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
   formatRound(columns = c("df", "t"), digits = 1)
 ```
+
 ## Plot Estimated Marignal Means to Compare Groups
 ```{r plot groups PTO}
 # New facet label names for variable
@@ -997,8 +1028,9 @@ facet_grid_def <- facet_grid(.id ~ cond.f,
 # Draw Plot 
 pd <- position_dodge(0.99)
 p.pto_emmeans_main <- func_plot_bar_facet(emm_fac %>%
-                                            mutate(.id = fct_relevel(.id, "rt_z", "variable_pointing_error_z", "eff_z", "dist_error_z"),
-                                            group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG"))) 
+                                            mutate(
+                                                   .id = fct_relevel(.id, "rt_z", "variable_pointing_error_z", "eff_z", "dist_error_z"),
+                                                   group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG"))) 
 
 # Adjust legend size
 p.pto_emmeans_main <- p.pto_emmeans_main + theme(legend.key.size = unit(0.3, "cm"))
@@ -1006,7 +1038,7 @@ p.pto_emmeans_main <- p.pto_emmeans_main + theme(legend.key.size = unit(0.3, "cm
 ### Plot Combined plot 
 ```{r create combined PTO}
 # Combine plot
-p.pto_comb <- plot_grid(p.pto_desc, p.pto_emmeans_main + rremove("x.text") + theme(legend.key.size = unit(0.3, "cm")), 
+p.pto_comb <- plot_grid(p.pto_desc, p.pto_emmeans_main + rremove("x.text") + theme( strip.text.y = element_blank() ),
           labels = c("a", "b"),
           ncol = 2, nrow = 1,
           rel_widths = c(2.2, 0.8))
@@ -1022,7 +1054,8 @@ pdf("./Figures/Spatial Cognition 1/p.pto_comb.pdf",
 print(p.pto_comb)
 dev.off()
 ```
-```{r, echo = FALSE, fig.width = 11, fig.height = 12, fig.cap="Figure PTO:(a) Time course of speed, precision, and efficiency before, during, and after bed rest. (b) Main effect of bed rest. Data are adjusted for baseline."}
+#### Figure 2. Point to Origin Task: (a) Time course of speed, precision, and efficiency before, during, and after bed rest. (b) Main effect of bed rest. Data are means and SD adjusted for baseline.
+```{r, echo = FALSE, fig.width = 10, fig.height = 8, fig.cap = ""}
 print(p.pto_comb)
 ```
 # Navigation Search Task 2D
@@ -1046,7 +1079,7 @@ desc <- subset(desc, variable != "total_target_visits_z" &
 
 # Plot desc 
 # New facet label names for variable
-new_labels <- c("Speed","Accuracy","Distance","Total Revisits")
+new_labels <- c("Speed","Accuracy","Distance","Revisits")
 names(new_labels) <- c("rt_z","acc_z","total_distance_z","total_revisits_z")
 
 new_labels2 <- c("Day", "Night")
@@ -1074,6 +1107,7 @@ facet_grid_def <- facet_grid(variable ~ cond.f,
 pd <- position_dodge(0.3)
 p.navis_2d_desc <- func_plot_line_facet(desc %>%
                                           mutate(
+                                            time.f = fct_relevel(time.f, "BDC-3", "HDT2", "HDT30", "HDT59", "R+12"),
                                             variable = fct_relevel(variable, "rt_z","acc_z","total_distance_z","total_revisits_z"),
                                             group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
   
@@ -1123,7 +1157,9 @@ blanks <- rep("", length(Parameter) / length(dvList) - 1)
 Variable <- c("Speed", blanks,"Accuracy", blanks, "Distance", blanks, "Total Revisits",
               blanks)
 tbl_mm_fac_aov_df_navis_2d <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
-
+```
+#### Table 10. Mixed Model Summary for Navigation Search Task 2D.
+```{r echo = FALSE}
 # Print table
 datatable(tbl_mm_fac_aov_df_navis_2d, 
           rownames = FALSE, filter = "top",
@@ -1132,6 +1168,7 @@ datatable(tbl_mm_fac_aov_df_navis_2d,
   formatRound(columns = c("P"), digits = 3) %>%
   formatRound(columns = c("df2", 'F'), digits = 1)
 ```
+
 ##Contrasts for Comparing Groups at Each Time Point
 ```{r contrast for groups by time NAVIS 2D}
 # Contrasts
@@ -1171,7 +1208,9 @@ tbl_contr_emm_fac_df$Time <- rep ( c("HDT2", rep("", tmp_n_time),
                                    length(dvList) )
 
 #table_contrasts_emm_fac_by_time_df$Contrast <- rep(c("cAG vs. CTRL","iAG vs. CTRL", "cAG vs. iAG"), length(dvList))
-
+```
+#### Table 11. Mixed Model Group Contrasts for Navigation Search Task 2D.
+```{r echo = FALSE}
 # Table for contrasts
 tbl_contr_emm_fac_df_navis_2d <- tbl_contr_emm_fac_df[c(9:11, 2, 8, 5:7)]
 datatable(tbl_contr_emm_fac_df_navis_2d, 
@@ -1219,6 +1258,7 @@ facet_grid_def <- facet_grid(.id ~ cond.f,
 pd <- position_dodge(0.3)
 p.navis_2d_emmeans <- func_plot_line_facet(emm_fac %>%
                                              mutate(
+                                               time.f = fct_relevel(time.f, "BDC-3", "HDT2", "HDT30", "HDT59", "R+12"),
                                                .id = fct_relevel(.id, "rt_z","acc_z","total_distance_z","total_revisits_z"),
                                                group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
 
@@ -1263,7 +1303,9 @@ Parameter <- Parameter_func(dvList)
 blanks <- rep("", length(Parameter) / length(dvList) - 1)
 Variable <- c("Speed", blanks,"Accuracy", blanks, "Distance", blanks, "Total Revisits", blanks)
 tbl_mm_fac_aov_df_navis_2d_main <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
-
+```
+#### Table 12. Mixed Model Summary testing the Main Effect of Group for Navigation Search Task 2D.
+```{r echo = FALSE}
 # Print ANOVA table
 datatable(tbl_mm_fac_aov_df_navis_2d_main, 
           rownames = FALSE, filter = "top",
@@ -1309,7 +1351,9 @@ tbl_contr_emm_fac_df$Condition <- rep ( c("Day", rep("", tmp_n_cond),
 
 # Table for contrasts
 tbl_contr_emm_fac_navis_2d_main <- tbl_contr_emm_fac_df[c(8:9, 2, 7,4:6)]
-
+```
+#### Table 13. Mixed Model Contrasts Comparing Groups for Navigation Search Task 2D.
+```{r echo = FALSE}
 # Print Contrast table
 datatable(tbl_contr_emm_fac_navis_2d_main, 
           rownames = FALSE, filter = "top",
@@ -1318,10 +1362,11 @@ datatable(tbl_contr_emm_fac_navis_2d_main,
   formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
   formatRound(columns = c("df", "t"), digits = 1)
 ```
+
 ## Plot Estimated Marignal Means for Group Comparisons
 ```{r plot groups NAVIS 2D}
 # New facet label names for variable
-new_labels <- c("Speed","Accuracy","Distance","Total Revisits")
+new_labels <- c("Speed","Accuracy","Distance","Revisits")
 names(new_labels) <- c("rt_z","acc_z","total_distance_z","total_revisits_z")
 
 new_labels2 <- c("Day", "Night")
@@ -1364,7 +1409,7 @@ p.navis_2d_emmeans_main <- p.navis_2d_emmeans_main + theme(legend.key.size = uni
 ### Plot Combined plot 
 ```{r plot combined NAVIS 2D}
 # Combine plot
-p.navis_2d_comb <- plot_grid(p.navis_2d_desc, p.navis_2d_emmeans_main + rremove("x.text") + theme(legend.key.size = unit(0.3, "cm")),
+p.navis_2d_comb <- plot_grid(p.navis_2d_desc, p.navis_2d_emmeans_main + rremove("x.text") + theme( strip.text.y = element_blank() ),
           labels = c("a", "b"),
           ncol = 2, nrow = 1,
           rel_widths = c(2, 1))
@@ -1380,9 +1425,11 @@ pdf("./Figures/Spatial Cognition 1/p.navis_2d_comb.pdf",
 print(p.navis_2d_comb)
 dev.off()
 ```
-```{r, echo = FALSE, fig.width = 9, fig.height = 9, fig.cap="Figure NAVIS 2D: (a) Time course of speed, accuracy, and distance before, during, and after bed rest. (b) Main effect of bed rest. Data are adjusted for baseline."}
+#### Figure 3. Navigation Search Task 2D: (a) Time course of speed, precision, and efficiency before, during, and after bed rest. (b) Main effect of bed rest. Data are means and SD adjusted for baseline.
+```{r, echo = FALSE, fig.width = 9, fig.height = 9, fig.cap = ""}
 print(p.navis_2d_comb)
 ```
+
 # Four Mountains Task
 ## Plot Time Course adjusted for Baseline 
 ```{r plot time course adjusted for baseline 4MTN}
@@ -1418,6 +1465,7 @@ tmpaes_errorbar <- aes(x = time.f,
 pd <- position_dodge(0.3)
 p.4mtn_desc <- func_plot_line_facet(desc %>%
                                       mutate(
+                                        time.f = fct_relevel(time.f, "BDC-3", "HDT2", "HDT30", "HDT59", "R+12"),
                                         variable = fct_relevel(variable, "rt_z","acc_z","eff_z"),
                                         group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
 
@@ -1459,7 +1507,9 @@ Parameter <- Parameter_func(dvList)
 blanks <- rep("", length(Parameter) / length(dvList) - 1)
 Variable <- c("Speed", blanks,"Accuracy", blanks, "Precision", blanks)
 tbl_mm_fac_aov_df_4mtn <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
-
+```
+#### Table 14. Mixed Model Summary for Four Mountains Task.
+```{r echo = FALSE}
 # Print table
 datatable(tbl_mm_fac_aov_df_4mtn, 
           rownames = FALSE, filter = "top",
@@ -1468,6 +1518,7 @@ datatable(tbl_mm_fac_aov_df_4mtn,
   formatRound(columns = c("P"), digits = 3) %>%
   formatRound(columns = c("df2", 'F'), digits = 1)
 ```
+
 ## Contrasts for Comparing Groups at Each Time Point
 ```{r constrasts for groups by time 4MTN}
 # Contrasts
@@ -1504,7 +1555,10 @@ tbl_contr_emm_fac_df$Time <- rep ( c("HDT2", rep("", tmp_n_time),
 
 # Table for contrasts
 tbl_contr_emm_fac_df_4mtn <- tbl_contr_emm_fac_df[c(8:9, 2, 7, 3:6)]
-
+```
+#### Table 15. Mixed Model Group Contrasts for Four Mountains Task.
+```{r echo = FALSE}
+# Print table
 datatable(tbl_contr_emm_fac_df_4mtn, 
           rownames = FALSE, filter = "top",
           options = list(pageLength = 50, 
@@ -1512,6 +1566,7 @@ datatable(tbl_contr_emm_fac_df_4mtn,
   formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
   formatRound(columns = c("df", "t"), digits = 1)
 ```
+
 ## Plot Estimated Marignal Means To Show Time Course for Each Group
 ```{r plot groups by time 4MTN}
 # Define model for emmeans
@@ -1546,6 +1601,7 @@ facet_grid_def <- facet_grid(~ .id,
 pd <- position_dodge(0.3)
 p.4mtn_emmeans <- func_plot_line_facet(emm_fac %>%
                                          mutate(
+                                           time.f = fct_relevel(time.f, "BDC-3", "HDT2", "HDT30", "HDT59", "R+12"),
                                            .id = fct_relevel(.id, "rt_z","acc_z","eff_z"),
                                            group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
 # Add zero line
@@ -1587,7 +1643,9 @@ Parameter <- Parameter_func(dvList)
 blanks <- rep("", length(Parameter) / length(dvList) - 1)
 Variable <- c("Speed", blanks,"Accuracy", blanks, "Efficiency", blanks)
 tbl_mm_fac_aov_df_4mtn_main <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
-
+```
+#### Table 16. Mixed Model Summary testing the Main Effect of Group for Four Mountains Task.
+```{r echo = FALSE}
 # Print ANOVA table
 datatable(tbl_mm_fac_aov_df_4mtn_main, 
           rownames = FALSE, filter = "top",
@@ -1596,6 +1654,7 @@ datatable(tbl_mm_fac_aov_df_4mtn_main,
   formatRound(columns = c("P"), digits = 3) %>%
   formatRound(columns = c("df2", 'F'), digits = 1)
 ```
+
 ## Contrasts for Group Comparisons
 ```{r contrasts for groups 4MTN}
 # Define model for emmeans
@@ -1626,6 +1685,10 @@ tbl_contr_emm_fac_df$Variable <- c("Speed", rep("", 1),
 # Table for contrasts
 tbl_contr_emm_fac_4mtn_main <- tbl_contr_emm_fac_df[c(7, 2, 6, 3:5)]
 
+
+```
+#### Table 17. Mixed Model Contrasts Comparing Groups for Four Mountains Task.
+```{r echo = FALSE}
 # Print Contrast table
 datatable(tbl_contr_emm_fac_4mtn_main, 
           rownames = FALSE, filter = "top",
@@ -1634,7 +1697,7 @@ datatable(tbl_contr_emm_fac_4mtn_main,
   formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
   formatRound(columns = c("df", "t"), digits = 1)
 ```
-## Plot Estimated Marignal Means fro Group Comparisons
+## Plot Estimated Marignal Means for Group Comparisons
 ```{r plot groups 4MTN}
 # New facet label names for variable
 new_labels <- c("Speed","Accuracy","Efficiency")
@@ -1673,7 +1736,7 @@ p.4mtn_emmeans_main <- p.4mtn_emmeans_main + theme(legend.key.size = unit(0.3, "
 ## Plot Combined plot 
 ```{r plot combined 4MTN}
 # Combine plot
-p.4mtn_comb <- plot_grid(p.4mtn_desc, p.4mtn_emmeans_main + rremove("x.text") + theme(legend.key.size = unit(0.3, "cm")), 
+p.4mtn_comb <- plot_grid(p.4mtn_desc, p.4mtn_emmeans_main + rremove("x.text") + theme( strip.text.y = element_blank() ),
           labels = c("a", "b"),
           ncol = 2, nrow = 1,
           rel_widths = c(2.2, 0.8))
@@ -1689,18 +1752,7 @@ pdf("./Figures/Spatial Cognition 1/p.4mtn_comb.pdf",
 print(p.4mtn_comb)
 dev.off()
 ```
-```{r, echo = FALSE, fig.width = 10, fig.height = 3.5, fig.cap="Figure 4MTN: (a) Time course of speed, accuracy, and efficiency before, during, and after bed rest. (b) Main effect of bed rest. Data are adjusted for baseline."}
+#### Figure 4. Fourn Mountains Task: (a) Time course of speed, precision, and efficiency before, during, and after bed rest. (b) Main effect of bed rest. Data are means and SD adjusted for baseline.
+```{r, echo = FALSE, fig.width = 10, fig.height = 3.5, fig.cap = ""}
 print(p.4mtn_comb)
 ```
-
-
-
-
-
-
-
-
-
-
-
-

@@ -1,0 +1,375 @@
+---
+title: "AGBRESA Extract Cognitive Data"
+author: "A Stahn"
+date: "11/08/2021"
+output: html_document
+---
+
+```{r include = FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+# Prepare Script
+## Required Packages
+```{r load required packages, message = FALSE}
+library(data.table) # rbindlist
+library(purrr) # harvest data func
+library(stringr) # harvest data func
+library(dplyr) # harvest data func
+library(plyr)
+library(tidyverse)
+library(grDevices) # check outliers based on IQR
+library(EnvStats) # Rosner test for outliers
+library(bpnreg) # circular stats
+library(openxlsx) # save tables
+library(readxl) # open excel
+library(arsenal) # tableby
+```
+## Print Session Info
+```{r print R and package versions}
+print(sessionInfo())
+```
+# Definition of Helper Functions 
+## Descriptive Functions
+```{r functions for descriptive stats}
+# Function to compute descriptives
+func_desc <- function(data, ...) {
+  df_tmp <- df_demo[ , !names(df_demo) %in% c("age","height", "weight")]
+  data <- merge(df_tmp, data, by = "id") #add demo
+  data <- reshape2::melt( data, 
+                              id.vars = names( Filter(is.factor, data) )
+                              )
+  groups <- enquos(...)
+  
+  result <- data %>%
+    
+    group_by(!!!groups) %>%
+    
+    dplyr::summarise(
+      MEAN = mean(value, na.rm = T),
+      SE = sd(value, na.rm = T) / sqrt(length(value) )
+      )
+  return(result)
+}
+```
+## Load Data
+```{r load data}
+#  Demographics
+df_demo <- read_excel("./Data/Data Demographics.xlsx", sheet = "Data Demo")
+df_demo[c(1:5)] <- lapply(df_demo[c(1:5)], as.factor)
+
+# Spatial Cognition 1
+
+# SUT
+df_sut <- read_excel("./Data/Data Spatial Cognition 1.xlsx", sheet = "Data SUT z")
+df_sut[c(1:3)] <- lapply(df_sut[c(1:3)], as.factor)
+
+# Clean 
+colnames(df_sut)[6] <- "acc_z"
+
+# Add id var for task
+df_sut$task <- as.factor ( c( rep ("sut", nrow(df_sut) ) ) )
+
+# Extract primary outcome
+df_sut <- df_sut[-c(4)]
+df_sut_prout_45 <- subset(df_sut, cond.f =="45")
+df_sut_prout_45 <- df_sut_prout_45[-c(3)]
+
+# Mean across blocks
+df_sut_prout <- reshape2::melt(df_sut, 
+                              id.vars = c("id", "time.f", "cond.f", "task") )
+
+df_sut_prout <- df_sut_prout %>%
+  group_by(id, time.f, variable, task) %>%
+  dplyr::summarise(
+    mean = mean(value))
+
+df_sut_prout <- reshape2::dcast(df_sut_prout, id + time.f + task ~ variable, value.var = "mean")
+df_sut_prout <- df_sut_prout[c(1:2,4:6,3)]
+df_sut_prout <- as_tibble(df_sut_prout)
+
+# PTO
+df_pto <- read_excel("./Data/Data Spatial Cognition 1.xlsx", sheet = "Data PTO z")
+df_pto[c(1:3)] <- lapply(df_pto[c(1:3)], as.factor)
+
+# Clean 
+df_pto <- df_pto[-c(4,6)]
+colnames(df_pto)[6] <- "acc_z"
+#df_pto <- df_pto[-c(4)] # drops distance error var
+
+# Add id var for task
+df_pto$task <- as.factor ( c( rep ("pto", nrow(df_pto) ) ) )
+
+# Extract primary outcome
+df_pto_prout_5 <- subset(df_pto, cond.f =="5")
+df_pto_prout_5 <- df_pto_prout_5[-c(3)]
+
+# Mean across blocks
+df_pto_prout <- reshape2::melt(df_pto, 
+                              id.vars = c("id", "time.f", "cond.f", "task") )
+
+df_pto_prout <- df_pto_prout %>%
+  group_by(id, time.f, variable, task) %>%
+  dplyr::summarise(
+    mean = mean(value))
+
+df_pto_prout <- reshape2::dcast(df_pto_prout, id + time.f + task ~ variable, value.var = "mean")
+df_pto_prout <- as_tibble(df_pto_prout)
+df_pto_prout <- df_pto_prout[c(1:2,4:6,3)]
+
+# 4MTN
+df_4mtn <- read_excel("./Data/Data Spatial Cognition 1.xlsx", sheet = "Data 4MTN z")
+df_4mtn[c(1:2)] <- lapply(df_4mtn[c(1:2)], as.factor)
+df_4mtn <- as.data.frame(df_4mtn)
+
+# Add id var for task
+df_4mtn$task <- as.factor ( c( rep ("4mtn", nrow(df_4mtn) ) ) )
+
+# Extract primary outcome
+df_4mtn_prout <- df_4mtn 
+df_4mtn_prout <- as_tibble(df_4mtn_prout)
+
+# NAVIS 2D
+df_navis_2d <- read_excel("./Data/Data Spatial Cognition 1.xlsx", sheet = "Data NAVIS 2D z")
+df_navis_2d[c(1:3)] <- lapply(df_navis_2d[c(1:3)], as.factor)
+
+# Clean 
+df_navis_2d <- df_navis_2d[c(1:3,5,7,8,10,11)]
+
+# Add id var for task
+df_navis_2d$task <- as.factor ( c( rep ("navis_2d", nrow(df_navis_2d) ) ) )
+
+# Extract primary outcome
+df_navis_2d_prout_day <- subset(df_navis_2d, cond.f =="Day") 
+df_navis_2d_prout_day <- df_navis_2d_prout_day[-c(3)]
+
+# Mean across conditions
+df_navis_2d_prout <- reshape2::melt(df_navis_2d, 
+                              id.vars = c("id", "time.f", "cond.f", "task") )
+
+df_navis_2d_prout <- df_navis_2d_prout %>%
+  group_by(id, time.f, variable, task) %>%
+  dplyr::summarise(
+    mean = mean(value))
+
+df_navis_2d_prout <- reshape2::dcast(df_navis_2d_prout, id + time.f + task ~ variable, value.var = "mean")
+df_navis_2d_prout <- as_tibble(df_navis_2d_prout)
+df_navis_2d_prout <- df_navis_2d_prout[c(1:2,4:8,3)]
+
+# Spatial Cognition 2
+
+# SOT
+df_sot <- read_excel("./Data/Data Spatial Cognition 2.xlsx", sheet = "Data SOT z")
+df_sot[c(1:2)] <- lapply(df_sot[c(1:2)], as.factor)
+df_sot[c(3:5)] <- lapply(df_sot[c(3:5)], as.numeric)
+
+# Clean 
+colnames(df_sot)[4] <- "acc_z"
+colnames(df_sot)[5] <- "eff_z"
+
+# Extract primary outcome
+df_sot_prout <- df_sot
+
+# Add id var for task
+df_sot_prout$task <- as.factor ( c( rep ("sot", nrow(df_sot_prout) ) ) )
+
+# Cognitive Mapping
+df_cogmap <- read_excel("./Data/Data Spatial Cognition 2.xlsx", sheet = "Data Cognitive Mapping z")
+df_cogmap[c(1:4)] <- lapply(df_cogmap[c(1:4)], as.factor)
+df_cogmap[c(5:8)] <- lapply(df_cogmap[c(5:8)], as.numeric)
+colnames(df_cogmap)[6] <- "acc_z"
+colnames(df_cogmap)[7] <- "rt_z"
+df_cogmap_agbresa <- subset(df_cogmap, group_2 != "CTRL_Amb" & group_2 != "R+180" )
+df_cogmap_agbresa <- df_cogmap_agbresa[-c(2:5)]
+
+# Extract primary outcome
+df_cogmap_agbresa_prout <- df_cogmap_agbresa
+
+# Add id var for task
+df_cogmap_agbresa_prout$task <- as.factor ( c( rep ("cogmap", nrow(df_cogmap_agbresa_prout) ) ) )
+
+# Water Maze
+df_wm <- read_excel("./Data/Data Spatial Cognition 2.xlsx", sheet = "Data WM z")
+df_wm[c(1:2)] <- lapply(df_wm[c(1:2)], as.factor)
+df_wm[c(3:9)] <- lapply(df_wm[c(3:9)], as.numeric)
+colnames(df_wm)[3] <- "rt_z"
+colnames(df_wm)[4] <- "distance_z"
+colnames(df_wm)[8] <- "heading_error_z"
+
+# Extract primary outcome
+df_wm <- df_wm[c(1:4,8)]
+df_wm_prout <- df_wm 
+
+# Add id var for task
+df_wm_prout$task <- as.factor ( c( rep ("wm", nrow(df_wm_prout) ) ) )
+
+# Plus Maze
+df_pm <- read_excel("./Data/Data Spatial Cognition 2.xlsx", sheet = "Data PM z")
+df_pm[c(1:2)] <- lapply(df_pm[c(1:2)], as.factor)
+df_pm[c(3:ncol(df_pm))] <- lapply(df_pm[c(3:ncol(df_pm))], as.numeric)
+
+# Clean
+df_pm <- df_pm[c(1:2,9,10)]
+
+# Extract primary outcome
+df_pm_prout <- df_pm 
+
+# Add id var for task
+df_pm_prout$task <- as.factor ( c( rep ("pm", nrow(df_pm_prout) ) ) )
+
+# Clean 
+colnames(df_pm)[3] <- "acc_z"
+colnames(df_pm)[4] <- "rt_z"
+df_pm$eff_z <- (df_pm$rt_z + df_pm$acc_z) /2
+
+# Navigation Strategy
+df_navstrat <- read_excel("./Data/Data Spatial Cognition 2.xlsx", sheet = "Data Navstrat z")
+df_navstrat[c(1:4)] <- lapply(df_navstrat[c(1:4)], as.factor)
+df_navstrat[c(5:ncol(df_navstrat))] <- lapply(df_navstrat[c(5:ncol(df_navstrat))], as.numeric)
+
+df_navstrat$direction <- factor(df_navstrat$direction,
+                                levels = c("diff", "same"),
+                                labels = c("Different", "Same"))
+
+# Mean across blocks
+df_navstrat <- reshape2::melt(df_navstrat, 
+                              id.vars = c("id", "time.f", "block", "direction") )
+
+df_navstrat <- df_navstrat %>%
+  group_by(id, time.f, direction, variable) %>%
+  dplyr::summarise(
+    mean = mean(value))
+
+df_navstrat <- reshape2::dcast(df_navstrat, id + time.f + direction ~ variable, value.var = "mean")
+
+# Clean
+colnames(df_navstrat)[4] <- "acc_z"
+
+# Extract primary outcome
+df_navstrat <- df_navstrat[-c(5)]
+df_navstrat_prout <- df_navstrat 
+
+# Add id var for task
+df_navstrat_prout$task <- as.factor ( c( rep ("navstrat", nrow(df_navstrat_prout) ) ) )
+
+# NAVIS VR
+df_navis_vr <- read_excel("./Data/Data Spatial Cognition 1.xlsx", sheet = "Data NAVIS VR z")
+df_navis_vr[c(1:3)] <- lapply(df_navis_vr[c(1:3)], as.factor)
+
+# Clean 
+df_navis_vr <- df_navis_vr[c(1:3,5,7,8,10,11)]
+
+# Extract primary outcome
+df_navis_vr_prout_day <- subset(df_navis_2d, cond.f == "Day") 
+df_navis_vr_prout_day <- df_navis_vr[-c(3)]
+
+# Mean across conditions
+df_navis_vr_prout <- reshape2::melt(df_navis_vr, 
+                              id.vars = c("id", "time.f", "cond.f") )
+
+df_navis_vr_prout <- df_navis_vr_prout %>%
+  group_by(id, time.f, variable) %>%
+  dplyr::summarise(
+    mean = mean(value))
+
+df_navis_vr_prout <- reshape2::dcast(df_navis_vr_prout, id + time.f ~ variable, value.var = "mean")
+
+# Add id var for task
+df_navis_vr_prout$task <- as.factor ( c( rep ("navis_vr", nrow(df_navis_vr_prout) ) ) )
+
+# Executive Control
+# Dual Task
+df_dual <- read_excel("./Data/Data Executive Control.xlsx",
+                          sheet = "Data Dual z")
+df_dual[c(1:5)] <- lapply(df_dual[c(1:5)], as.factor)
+
+# Clean 
+df_dual <- df_dual[c(1:3,6,9,10)]
+colnames(df_dual)[3] <- "cond.f"
+colnames(df_dual)[4] <- "acc_z"
+
+# Extract primary outcome
+df_dual_prout <- subset(df_dual, cond.f =="dual")
+df_dual_prout <- df_dual_prout[-c(3)]
+
+# Add id var for task
+df_dual_prout$task <- as.factor ( c( rep ("dual", nrow(df_dual_prout) ) ) )
+
+# Switch Task
+df_switch <- read_excel("./Data/Data Executive Control.xlsx",
+                        sheet = "Data Switch z")
+df_switch[c(1:6)] <- lapply(df_switch[c(1:6)], as.factor)
+
+# Clean 
+df_switch <- subset(df_switch, task == "mb")
+df_switch <- df_switch[c(1:2,5,7,10:11)]
+colnames(df_switch)[3] <- "cond.f"
+colnames(df_switch)[4] <- "acc_z"
+
+# Extract primary outcome
+df_switch_prout <- subset(df_switch, cond.f =="switch")
+df_switch_prout <- df_switch_prout[-c(3)]
+
+# Add id var for task
+df_switch_prout$task <- as.factor ( c( rep ("switch", nrow(df_switch_prout) ) ) )
+
+# Cognition
+df_cognition <- read_excel("./Data/Data Cognition.xlsx", 
+                     sheet = "Data Cognition")
+
+# Convert var types
+df_cognition[c(1:3)] <- lapply(df_cognition[c(1:3)], as.factor)
+
+# Unify col names
+names(df_cognition)[names(df_cognition) == "PVT_Accuracy"] <- "PVT_pCorr"
+names(df_cognition)[names(df_cognition) == "PVT_Slowness"] <- "PVT_AvRt"
+names(df_cognition)[names(df_cognition) == "BART_RiskScoreP"] <- "BART_pCorr"
+names(df_cognition)[names(df_cognition) == "MP_Accuracy"] <- "MP_pCorr"
+names(df_cognition)[names(df_cognition) == "LOT_Accuracy"] <- "LOT_pCorr"
+
+# Add 'z'
+colnames(df_cognition)[c(4:ncol(df_cognition))] <- paste(colnames(df_cognition[c(4:ncol(df_cognition))]), "z", sep = "_")
+
+# Extract primary outcome
+df_cognition_prout <- df_cognition[-c(2,32,33)]
+
+```
+# Write to Excel File
+```{r export}
+list_of_datasets <- list( 
+                          "Data SUT prout" = df_sut_prout,
+                          "Data PTO prout" = df_pto_prout,
+                          "Data 4MTN prout" = df_4mtn_prout,
+                          "Data SUT prout 45" = df_sut_prout_45,
+                          "Data PTO prout 5" = df_pto_prout_5,
+                          "Data NAVIS 2D prout" = df_navis_2d_prout,
+                          "Data NAVIS 2D prout Day" = df_navis_2d_prout_day)
+write.xlsx(list_of_datasets, file = "./Data/Data Spatial Cognition 1 prout.xlsx", overwrite = TRUE)
+
+list_of_datasets <- list( 
+                          "Data Cognition prout" = df_cognition_prout)
+write.xlsx(list_of_datasets, file = "./Data/Data Cognition prout.xlsx", overwrite = TRUE)
+
+list_of_datasets <- list( 
+                          "Data Switch prout" = df_switch_prout,
+                          "Data Dual  prout" = df_switch_prout)
+write.xlsx(list_of_datasets, file = "./Data/Data Executive control prout.xlsx", overwrite = TRUE)
+
+
+list_of_datasets <- list( "Data SOT prout" = df_sot_prout,
+                          "Data WM prout" = df_wm_prout,
+                          "Data PM prout" = df_pm_prout,
+                          "Data Navstrat prout" = df_navstrat_prout,
+                          "Data Cognitive Mapping prout" = df_cogmap_agbresa_prout,
+                          "Data NAVIS VR prout" = df_navis_vr_prout,
+                          "Data NAVIS VR prout Day" = df_navis_vr_prout_day)
+
+write.xlsx(list_of_datasets, file = "./Data/Data Spatial Cognition 2 prout.xlsx", overwrite = TRUE)
+
+list_of_datasets <- list( "Data Dual" = df_dual_prout,
+                          "Data Switch" = df_switch_prout)
+write.xlsx(list_of_datasets, file = "./Data/Data Executive Control prout.xlsx", overwrite = TRUE)
+```
+
+
+
