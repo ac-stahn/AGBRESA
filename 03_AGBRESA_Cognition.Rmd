@@ -28,41 +28,6 @@ library(ggsci)
 library(scales)
 library(cowplot) # for plot_grid, combine plots using cowplot
 ```
-library(knitr) # for kable
-library(openxlsx) # save tableone as xls; source ("/Users/astahn/Documents/Research Tools/Software/R/tableone_helper_functions.R") 
-library(readxl) # read xls
-
-library(Rmisc) # for descriptives and plots if summary is used
-library(Hmisc)
-library(Gmisc, verbose = FALSE)
-library(arsenal) # for tables
-require(survival) # ??? for tables?
-library(tableone) # descriptive stratified by group
-library(memisc) # for relabeling
-library(DT) # Print table nicely in markdown
-library(data.table) #for converting to data table
-library(dplyr) # means across subjects and groups, change scores; fct_relevel
-library(quantmod) # change scores
-library(naniar) # replace outliers with NA
-library(berryFunctions) # for adding rows to df
-
-library(lme4) # for adding mixed model functions to plot
-library(lmerTest) # for adding mixed model functions to plot
-library(purrr) # for map function
-library(emmeans) # for adding mixed model marignal means and se to plot
-library(qdapTools) # list_df2df(tbl_mm_fac_aov)
-
-library(ggpubr) # for compare means, descriptives and theme_pubr
-library(ggplot2)
-library(Rmisc) # for describe by
-library(ggsci)
-library(scales)
-library(cowplot) # for plot_grid, combine plots using Cowplot
-library(svglite) # save plots
-
-library(tidyverse) # for fct_relevel
-
-
 ## Print Session Info
 ```{r print R and package versions}
 print(sessionInfo())
@@ -120,10 +85,11 @@ df_cognition[c(1:3)] <- lapply(df_cognition[c(1:3)], as.factor)
 
 # Unify col names
 names(df_cognition)[names(df_cognition) == "PVT_Accuracy"] <- "PVT_pCorr"
-names(df_cognition)[names(df_cognition) == "PVT_Slowness"] <- "PVT_AvRt"
+names(df_cognition)[names(df_cognition) == "PVT_Slowness"] <- "PVT_AvRT"
 names(df_cognition)[names(df_cognition) == "BART_RiskScoreP"] <- "BART_pCorr"
 names(df_cognition)[names(df_cognition) == "MP_Accuracy"] <- "MP_pCorr"
 names(df_cognition)[names(df_cognition) == "LOT_Accuracy"] <- "LOT_pCorr"
+names(df_cognition)[names(df_cognition) == "NBCK_Av_pCorr"] <- "NBCK_pCorr"
 
 # Add 'z'
 colnames(df_cognition)[c(4:ncol(df_cognition))] <- paste(colnames(df_cognition[c(4:ncol(df_cognition))]), "z", sep = "_")
@@ -198,7 +164,6 @@ func_bdc_correction <- function(data, ...) {
     select( c(!mean_bdc_by_group & !MEAN) ) %>%
     rename(MEAN = MEAN_corr)
 }
-
 ```
 ## Plot Functions
 ```{r functions for plots}
@@ -287,6 +252,25 @@ func_bdc_cov <- function(data, ...) {
  
   df_tmp <- merge(df_demo, df_tmp, by  = c("id")) 
 }
+
+func_bdc_cov_multi_sep <- function(data, ...) {
+  df_tmp <- subset(data[-c(2)], time.n > bdc )
+  df_tmp_pre <- subset(data, time.n < (bdc+1) )
+  df_tmp_pre <- df_tmp_pre[,!grepl("time.n", colnames(df_tmp_pre))] 
+  df_tmp_pre <- 
+    reshape2::melt( df_tmp_pre, 
+                              id.vars = names( Filter(is.factor, df_tmp_pre) )
+                              ) %>%
+    group_by(id, variable) %>%
+    dplyr::summarise(
+      mean_bdc = mean(value, na.rm = T) 
+    )
+  df_tmp_pre <- reshape2::dcast( df_tmp_pre, id ~ variable, value.var = "mean_bdc") %>%
+    rename_at(vars(contains("_z")), ~ str_c("pre_", .))
+  df_tmp <- merge(df_tmp_pre, df_tmp, by = c("id") )
+  droplevels(df_tmp)
+  df_tmp <- merge(df_demo[c(1,3,5:6)], df_tmp, by  = c("id"))
+  }
 
 # Wrapper for mixed models, takes 'dvList', requires 'model_mm', e.g., model_mm <- paste0(" + sex"," + age", " + time.f",  " * group_3", " * cond.f", " + (1|id)" )
 func_mm_fac_with_bdc_adj_help <- function(dvList) {
@@ -405,9 +389,8 @@ pd <- position_dodge(0.3)
 desc <- dplyr::filter(desc_all, grepl("AvR", variable))
 desc <- droplevels(desc)
 # New facet label names for variable
-new_labels <- c("MP Speed (z)", "VOLT (z)", "NBACK (z)", "AM (z)", "LOT (z)", 
-                      "ERT (z)", "MRT (z)", "DSST (z)", "BART (z)", "PVT (z)")
-names(new_labels) <- c("MP_AvRT_z", "VOLT_AvRT_z", "NBCK_AvRT_z", "AM_AvRT_z", "LOT_AvRT_z", "ERT_AvRT_z", "MRT_AvRT_z", "DSST_AvRT_z", "BART_AvRT_z", "PVT_AvRt_z")
+new_labels <- c("MP Speed", "VOLT", "NBACK", "AM", "LOT", "ERT", "MRT", "DSST", "BART", "PVT")
+names(new_labels) <- c("MP_AvRT_z", "VOLT_AvRT_z", "NBCK_AvRT_z", "AM_AvRT_z", "LOT_AvRT_z", "ERT_AvRT_z", "MRT_AvRT_z", "DSST_AvRT_z", "BART_AvRT_z", "PVT_AvRT_z")
 
 # Define labels for func_plot_line_facet
 labeller_def <- labeller(variable = new_labels)
@@ -432,8 +415,8 @@ desc <- dplyr::filter(desc_all, grepl("pCorr",variable))
 desc <- droplevels(desc)
 
 # New facet label names for variable
-new_labels <- c("MP (z)", "VOLT (z)", "NBACK (z)", "AM (z)", "LOT (z)", 
-                      "ERT (z)", "MRT (z)", "DSST (z)", "BART (z)", "PVT (z)")
+new_labels <- c("MP", "VOLT", "NBACK", "AM", "LOT", 
+                      "ERT", "MRT", "DSST", "BART", "PVT")
 names(new_labels) <- c("MP_pCorr_z", "VOLT_pCorr_z", "NBCK_Av_pCorr_z", "AM_pCorr_z", "LOT_pCorr_z", "ERT_pCorr_z", "MRT_pCorr_z", "DSST_pCorr_z", "BART_pCorr_z", "PVT_pCorr_z")
 
 # Define labels for func_plot_line_facet
@@ -456,13 +439,13 @@ p.cognition_desc_pCorr <- p.cognition_desc_pCorr + theme(legend.key.size = unit(
 # Efficiency
 # Select
 desc <- dplyr::filter(desc_all, grepl("Eff",variable))
-desc <- subset(desc, variable != "BART_Eff_z" & variable != "PVT_Eff_z")
+desc <- subset(desc, variable != "BART_Eff_z")
 desc <- droplevels(desc)
 
 # New facet label names for variable
-new_labels <- c("MP (z)", "VOLT (z)", "NBACK (z)", "AM (z)", "LOT (z)", 
-                      "ERT (z)", "MRT (z)", "DSST (z)")
-names(new_labels) <- c("MP_Eff_z", "VOLT_Eff_z", "NBACK_Eff_z", "AM_Eff_z", "LOT_Eff_z", "ERT_Eff_z", "MRT_Eff_z", "DSST_Eff_z")
+new_labels <- c("MP", "VOLT", "NBACK", "AM", "LOT", 
+                      "ERT", "MRT", "DSST" , "PVT")
+names(new_labels) <- c("MP_Eff_z", "VOLT_Eff_z", "NBCK_Eff_z", "AM_Eff_z", "LOT_Eff_z", "ERT_Eff_z", "MRT_Eff_z", "DSST_Eff_z", "PVT_Eff_z")
 
 # Define labels for func_plot_line_facet
 labeller_def <- labeller(variable = new_labels)
@@ -492,10 +475,12 @@ df_cognition$time.n <- as.numeric((df_cognition$time.n))
 
 # Define BDC sessions (number indicates last bdc sessions based on time.n)
 bdc <- 3
-df_tmp <- func_bdc_cov(df_cognition)
+
+# Create df with bdc as covariate
+df_tmp <- func_bdc_cov_multi_sep(df_cognition, id)
 
 # Select dep vars
-dvList <- colnames(df_tmp)[c(42:71)]
+dvList <- colnames(df_tmp)[c(37:66)]
 
 # Define model
 model_mm <- paste0(" + sex"," + age", " + time.f",  " * group_3", " + (1|id)" )
@@ -533,8 +518,8 @@ tbl_mm_fac_aov_df_AvRT <- cbind(Variable, Parameter, tbl_mm_fac_aov_df_AvRT[c(4:
 tbl_mm_fac_aov_df_pCorr <- cbind(Variable, Parameter, tbl_mm_fac_aov_df_pCorr[c(4:7)])
 tbl_mm_fac_aov_df_eff <- cbind(Variable, Parameter, tbl_mm_fac_aov_df_eff[c(4:7)])
 
-# Drop BART and PVT from Eff
-tbl_mm_fac_aov_df_eff <- tbl_mm_fac_aov_df_eff[-c( (nrow(tbl_mm_fac_aov_df_eff)-11):   nrow(tbl_mm_fac_aov_df_eff)),]
+# Drop BART from Eff
+tbl_mm_fac_aov_df_eff <- tbl_mm_fac_aov_df_eff[-c( 49:54),]
 ```
 #### Table 2. Mixed Model Summary for Speed.
 ```{r echo = FALSE}
@@ -629,7 +614,7 @@ tbl_contr_emm_fac_df_AvRT <- cbind(Variable, Time, tbl_contr_emm_fac_df_AvRT[c(2
 tbl_contr_emm_fac_df_pCorr <- cbind(Variable, Time, tbl_contr_emm_fac_df_pCorr[c(2, 7, 4:6)])
 
 tbl_contr_emm_fac_df_eff <- cbind(Variable, Time, tbl_contr_emm_fac_df_eff)
-tbl_contr_emm_fac_df_eff <- dplyr::filter(tbl_contr_emm_fac_df_eff, !grepl("PVT_Eff_z", .id) & !grepl("BART_Eff_z", .id)) # Drop BART and PVT from Eff
+tbl_contr_emm_fac_df_eff <- dplyr::filter(tbl_contr_emm_fac_df_eff, !grepl("BART_Eff_z", .id)) # Drop BART from Eff
 tbl_contr_emm_fac_df_eff <- tbl_contr_emm_fac_df_eff[c(1,2,4,5,9,6:8)]
 ```
 #### Table 5. Mixed Model Group Contrasts for Speed.
@@ -690,8 +675,8 @@ emm_fac_pCorr <- dplyr::filter(emm_fac, grepl("pCorr", .id))
 emm_fac_pCorr <- droplevels(emm_fac_pCorr)
 
 # New facet label names for variable
-new_labels <- c("MP (z)", "VOLT (z)", "NBACK (z)", "AM (z)", "LOT (z)", 
-                      "ERT (z)", "MRT (z)", "DSST (z)", "BART (z)", "PVT (z)")
+new_labels <- c("MP", "VOLT", "NBACK", "AM", "LOT", 
+                      "ERT", "MRT", "DSST", "BART", "PVT")
 names(new_labels) <- c("MP_pCorr_z", "VOLT_pCorr_z", "NBCK_Av_pCorr_z", "AM_pCorr_z", "LOT_pCorr_z", "ERT_pCorr_z", "MRT_pCorr_z", "DSST_pCorr_z", "BART_pCorr_z", "PVT_pCorr_z")
 
 # Define labels for func_plot_line_facet
@@ -714,9 +699,9 @@ emm_fac_AvRT <- dplyr::filter(emm_fac, grepl("AvR", .id))
 emm_fac_AvRT <- droplevels(emm_fac_AvRT)
 
 # New facet label names for variable
-new_labels <- c("MP Speed (z)", "VOLT (z)", "NBACK (z)", "AM (z)", "LOT (z)", 
-                      "ERT (z)", "MRT (z)", "DSST (z)", "BART (z)", "PVT (z)")
-names(new_labels) <- c("MP_AvRT_z", "VOLT_AvRT_z", "NBCK_AvRT_z", "AM_AvRT_z", "LOT_AvRT_z", "ERT_AvRT_z", "MRT_AvRT_z", "DSST_AvRT_z", "BART_AvRT_z", "PVT_AvRt_z")
+new_labels <- c("MP Speed", "VOLT", "NBACK", "AM", "LOT", 
+                      "ERT", "MRT", "DSST", "BART", "PVT")
+names(new_labels) <- c("MP_AvRT_z", "VOLT_AvRT_z", "NBCK_AvRT_z", "AM_AvRT_z", "LOT_AvRT_z", "ERT_AvRT_z", "MRT_AvRT_z", "DSST_AvRT_z", "BART_AvRT_z", "PVT_AvRT_z")
 
 # Define labels for func_plot_line_facet
 labeller_def <- labeller(.id = new_labels)
@@ -730,19 +715,19 @@ facet_grid_def <- facet_wrap(~ .id,
 # Plot
 p.cognition_emmeans_AvRT <- func_plot_line_facet(emm_fac_AvRT %>%
                                                   mutate(group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG"),
-                                                         .id = fct_relevel(.id, "MP_AvRT_z", "VOLT_AvRT_z", "NBCK_AvRT_z","AM_AvRT_z","LOT_AvRT_z","ERT_AvRT_z","MRT_AvRT_z", "DSST_AvRT_z", "BART_AvRT_z", "PVT_AvRt_z"))) + geom_hline(yintercept = 0, size = 0.3, linetype = "dotted") + theme(legend.key.size = unit(0.3, "cm"))
+                                                         .id = fct_relevel(.id, "MP_AvRT_z", "VOLT_AvRT_z", "NBCK_AvRT_z","AM_AvRT_z","LOT_AvRT_z","ERT_AvRT_z","MRT_AvRT_z", "DSST_AvRT_z", "BART_AvRT_z", "PVT_AvRT_z"))) + geom_hline(yintercept = 0, size = 0.3, linetype = "dotted") + theme(legend.key.size = unit(0.3, "cm"))
 
 # Efficiency
 # Select
 emm_fac_eff <- dplyr::filter(emm_fac, grepl("Eff", .id))
 emm_fac_eff <- droplevels(emm_fac_eff)
 # Drop BART and PVT from Eff
-emm_fac_eff <- emm_fac_eff %>% filter(!grepl("BART_Eff_z|PVT_Eff_z", .id))
+emm_fac_eff <- emm_fac_eff %>% filter(!grepl("BART_Eff_z", .id))
 
 # New facet label names for variable
-new_labels <- c("MP (z)", "VOLT (z)", "NBACK (z)", "AM (z)", "LOT (z)", 
-                      "ERT (z)", "MRT (z)", "DSST (z)")
-names(new_labels) <- c("MP_Eff_z", "VOLT_Eff_z", "NBACK_Eff_z", "AM_Eff_z", "LOT_Eff_z", "ERT_Eff_z", "MRT_Eff_z", "DSST_Eff_z")
+new_labels <- c("MP", "VOLT", "NBACK", "AM", "LOT", 
+                      "ERT", "MRT", "DSST", "PVT")
+names(new_labels) <- c("MP_Eff_z", "VOLT_Eff_z", "NBCK_Eff_z", "AM_Eff_z", "LOT_Eff_z", "ERT_Eff_z", "MRT_Eff_z", "DSST_Eff_z", "PVT_Eff_z")
 
 # Define labels for func_plot_line_facet
 labeller_def <- labeller(.id = new_labels)
@@ -756,7 +741,7 @@ facet_grid_def <- facet_wrap(~ .id,
 # Plot
 p.cognition_emmeans_eff <- func_plot_line_facet(emm_fac_eff %>%
                                                   mutate(group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG"),
-                                                         .id = fct_relevel(.id, "MP_Eff_z", "VOLT_Eff_z", "NBACK_Eff_z","AM_Eff_z","LOT_Eff_z","ERT_Eff_z","MRT_Eff_z", "DSST_Eff_z"))) + geom_hline(yintercept = 0, size = 0.3, linetype = "dotted") + theme(legend.key.size = unit(0.3, "cm"))
+                                                         .id = fct_relevel(.id, "MP_Eff_z", "VOLT_Eff_z", "NBCK_Eff_z","AM_Eff_z","LOT_Eff_z","ERT_Eff_z","MRT_Eff_z", "DSST_Eff_z", "PVT_Eff_z"))) + geom_hline(yintercept = 0, size = 0.3, linetype = "dotted") + theme(legend.key.size = unit(0.3, "cm"))
 ```
 ## Mixed Model for Main Effect of Bed Rest (excluding BDC)
 ```{r mixed model for main effect group}
@@ -766,7 +751,7 @@ df_tmp <- subset(df_tmp, time.n < 11)
 df_tmp <- droplevels(df_tmp)
 
 # Select dep vars
-dvList <- colnames(df_tmp)[c(42:71)]
+dvList <- colnames(df_tmp)[c(37:66)]
 
 # Define model
 model_mm <- paste0(" + sex"," + age", " + group_3", " + (1|id)" )
@@ -805,7 +790,7 @@ tbl_mm_fac_aov_df_AvRT <- cbind(Variable, Parameter, tbl_mm_fac_aov_df_AvRT[c(4:
 tbl_mm_fac_aov_df_pCorr <- cbind(Variable, Parameter, tbl_mm_fac_aov_df_pCorr[c(4:7)])
 
 tbl_mm_fac_aov_df_eff <- cbind(Variable, Parameter, tbl_mm_fac_aov_df_eff)
-tbl_mm_fac_aov_df_eff <- dplyr::filter(tbl_mm_fac_aov_df_eff, !grepl("PVT_Eff_z", X1) & !grepl("BART_Eff_z", X1)) # Drop BART and PVT from Eff
+tbl_mm_fac_aov_df_eff <- dplyr::filter(tbl_mm_fac_aov_df_eff, !grepl("BART_Eff_z", X1)) # Drop BART from Eff
 tbl_mm_fac_aov_df_eff <- tbl_mm_fac_aov_df_eff[-c(3:5)]
 ```
 #### Table 8. Mixed Model Summary testing the Main Effect of Group for Speed.
@@ -890,8 +875,8 @@ tbl_contr_emm_fac_df_pCorr <- cbind(Variable, tbl_contr_emm_fac_df_pCorr[c(2, 6,
 
 tbl_contr_emm_fac_df_eff <- cbind(Variable, tbl_contr_emm_fac_df_eff[c(2, 6, 3:5)])
 
-# Drop BART and PVT from Eff
-tbl_contr_emm_fac_df_eff <- tbl_contr_emm_fac_df_eff[-c( (nrow(tbl_contr_emm_fac_df_eff)-5):   nrow(tbl_contr_emm_fac_df_eff)),]
+# Drop BART from Eff
+tbl_contr_emm_fac_df_eff <- tbl_contr_emm_fac_df_eff[-c( 25:27),]
 ```
 #### Table 11. Mixed Model Contrasts Comparing Groups for Speed.
 ```{r echo = FALSE}
@@ -948,9 +933,9 @@ emm_fac_AvRT <- dplyr::filter(emm_fac, grepl("AvR", .id))
 emm_fac_AvRT <- droplevels(emm_fac_AvRT)
 
 # New facet label names for variable
-new_labels <- c("MP (z)", "VOLT (z)", "NBACK (z)", "AM (z)", "LOT (z)", 
-                      "ERT (z)", "MRT (z)", "DSST (z)", "BART (z)", "PVT (z)")
-names(new_labels) <- c("MP_AvRT_z", "VOLT_AvRT_z", "NBCK_AvRT_z", "AM_AvRT_z", "LOT_AvRT_z", "ERT_AvRT_z", "MRT_AvRT_z", "DSST_AvRT_z", "BART_AvRT_z", "PVT_AvRt_z")
+new_labels <- c("MP", "VOLT", "NBACK", "AM", "LOT", 
+                      "ERT", "MRT", "DSST", "BART", "PVT")
+names(new_labels) <- c("MP_AvRT_z", "VOLT_AvRT_z", "NBCK_AvRT_z", "AM_AvRT_z", "LOT_AvRT_z", "ERT_AvRT_z", "MRT_AvRT_z", "DSST_AvRT_z", "BART_AvRT_z", "PVT_AvRT_z")
 
 # Define labels for func_plot_line_facet
 labeller_def <- labeller(.id = new_labels)
@@ -964,7 +949,7 @@ facet_grid_def <- facet_wrap(~ .id,
 # Draw Plot 
 p.cognition_emmeans_AvRT_main <- func_plot_bar_facet(emm_fac_AvRT %>%
                                                   mutate(group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG"),
-                                                         .id = fct_relevel(.id, "MP_AvRT_z", "VOLT_AvRT_z", "NBCK_AvRT_z","AM_AvRT_z","LOT_AvRT_z","ERT_AvRT_z","MRT_AvRT_z", "DSST_AvRT_z", "BART_AvRT_z", "PVT_AvRt_z"))) + theme(legend.key.size = unit(0.3, "cm"))
+                                                         .id = fct_relevel(.id, "MP_AvRT_z", "VOLT_AvRT_z", "NBCK_AvRT_z","AM_AvRT_z","LOT_AvRT_z","ERT_AvRT_z","MRT_AvRT_z", "DSST_AvRT_z", "BART_AvRT_z", "PVT_AvRT_z"))) + theme(legend.key.size = unit(0.3, "cm"))
 
 
 # Accuracy
@@ -973,8 +958,8 @@ emm_fac_pCorr <- dplyr::filter(emm_fac, grepl("pCorr", .id))
 emm_fac_pCorr <- droplevels(emm_fac_pCorr)
 
 # New facet label names for variable
-new_labels <- c("MP (z)", "VOLT (z)", "NBACK (z)", "AM (z)", "LOT (z)", 
-                      "ERT (z)", "MRT (z)", "DSST (z)", "BART (z)", "PVT (z)")
+new_labels <- c("MP", "VOLT", "NBACK", "AM", "LOT", 
+                      "ERT", "MRT", "DSST", "BART", "PVT")
 names(new_labels) <- c("MP_pCorr_z", "VOLT_pCorr_z", "NBCK_Av_pCorr_z", "AM_pCorr_z", "LOT_pCorr_z", "ERT_pCorr_z", "MRT_pCorr_z", "DSST_pCorr_z", "BART_pCorr_z", "PVT_pCorr_z")
 
 # Define labels for func_plot_line_facet
@@ -996,13 +981,13 @@ p.cognition_emmeans_pCorr_main <- func_plot_bar_facet(emm_fac_pCorr %>%
 # Select
 emm_fac_eff <- dplyr::filter(emm_fac, grepl("Eff", .id))
 emm_fac_eff <- droplevels(emm_fac_eff)
-# Drop BART and PVT from Eff
-emm_fac_eff <- emm_fac_eff[-c( (nrow(emm_fac_eff)-5):   nrow(emm_fac_eff)),]
+# Drop BART from Eff
+emm_fac_eff <- emm_fac_eff[-c( 25:27),]
 
 # New facet label names for variable
-new_labels <- c("MP (z)", "VOLT (z)", "NBACK (z)", "AM (z)", "LOT (z)", 
-                      "ERT (z)", "MRT (z)", "DSST (z)")
-names(new_labels) <- c("MP_Eff_z", "VOLT_Eff_z", "NBACK_Eff_z", "AM_Eff_z", "LOT_Eff_z", "ERT_Eff_z", "MRT_Eff_z", "DSST_Eff_z")
+new_labels <- c("MP", "VOLT", "NBACK", "AM", "LOT", 
+                      "ERT", "MRT", "DSST", "PVT")
+names(new_labels) <- c("MP_Eff_z", "VOLT_Eff_z", "NBCK_Eff_z", "AM_Eff_z", "LOT_Eff_z", "ERT_Eff_z", "MRT_Eff_z", "DSST_Eff_z", "PVT_Eff_z")
 
 # Define labels for func_plot_line_facet
 labeller_def <- labeller(.id = new_labels)
@@ -1016,7 +1001,7 @@ facet_grid_def <- facet_wrap(~ .id,
 # Draw Plot 
 p.cognition_emmeans_eff_main <- func_plot_bar_facet(emm_fac_eff %>%
                                                   mutate(group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG"),
-                                                         .id = fct_relevel(.id, "MP_Eff_z", "VOLT_Eff_z", "NBACK_Eff_z","AM_Eff_z","LOT_Eff_z","ERT_Eff_z","MRT_Eff_z", "DSST_Eff_z"))) + theme(legend.key.size = unit(0.3, "cm"))
+                                                         .id = fct_relevel(.id, "MP_Eff_z", "VOLT_Eff_z", "NBCK_Eff_z","AM_Eff_z","LOT_Eff_z","ERT_Eff_z","MRT_Eff_z", "DSST_Eff_z", "PVT_Eff_z"))) + theme(legend.key.size = unit(0.3, "cm"))
 
 
 ```
@@ -1063,6 +1048,7 @@ pdf("./Figures/Cognition/p.cognition_comb_acc.pdf",
 print(p.cognition_comb_acc)
 dev.off()
 ```
+
 #### Figure 2. (a) Time course of accuracy before, during, and after bed rest. Means within groups are shifted to reflect a pre-HDT baseline performance of 0 (zero). (b) Main effect of bed rest. Data means and SE are adjusted for baseline. 
 ```{r, echo = FALSE, fig.width = 12, fig.height = 20, fig.cap = ""}
 print(p.cognition_comb_acc)

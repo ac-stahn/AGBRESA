@@ -229,7 +229,13 @@ library(readxl)</code></pre>
 <div id="load-data" class="section level1">
 <h1>Load Data</h1>
 <pre class="r"><code># read data
+
 df_cognition &lt;- read_excel(&quot;/Users/astahn/Publications/AGBRESA/Data/Cognition/AGBRESA Cognition Data Matrices.xlsx&quot;, sheet = &quot;Matrix_AGBRESA_C_S&quot;)
+
+# Correct Battery number Note: original Battery number is not in correct order becauase battery order didnt seem tobe followed in some cases
+df_cognition$Battery &lt;- rep( 1:15, 24)
+
+
 df_cognition &lt;- df_cognition[c(&quot;ID&quot;, 
                                &quot;Battery&quot;,
                                &quot;MP_AvRT&quot;,&quot;MP_Accuracy&quot;,
@@ -244,6 +250,7 @@ df_cognition &lt;- df_cognition[c(&quot;ID&quot;,
                                &quot;PVT_Slowness&quot;,&quot;PVT_Accuracy&quot;)]
 
 df_cognition[c(1,2)] &lt;- lapply(df_cognition[c(1,2)], factor)
+
 
 df_cognition$time.f &lt;- revalue(df_cognition$Battery, c( &quot;1&quot; = &quot;BDC-13&quot;,
                                                         &quot;2&quot; = &quot;BDC-11&quot;,
@@ -262,6 +269,8 @@ df_cognition$time.f &lt;- revalue(df_cognition$Battery, c( &quot;1&quot; = &quot
                                                         &quot;15&quot; = &quot;R+12&quot;)) #relabel time.f
 
 df_cognition[c(2)] &lt;- lapply(df_cognition[c(2)], as.numeric)
+
+# Drop fam sessiosn
 df_cognition &lt;- subset(df_cognition, Battery &gt; 2)
 names(df_cognition)</code></pre>
 <pre><code>##  [1] &quot;ID&quot;              &quot;Battery&quot;         &quot;MP_AvRT&quot;         &quot;MP_Accuracy&quot;    
@@ -273,16 +282,16 @@ names(df_cognition)</code></pre>
 <pre class="r"><code>df_cognition &lt;- df_cognition[c(1,2,23,3:22)]
 
 tmp &lt;- ddply(df_cognition, c(&quot;ID&quot;, &quot;Battery&quot;, &quot;time.f&quot;), summarise,
-                MP_Eff = (MP_AvRT + MP_Accuracy)/2,
-                VOLT_Eff =(VOLT_AvRT + VOLT_pCorr)/2,
-                NBACK_Eff =(NBCK_AvRT + NBCK_Av_pCorr)/2,
-                AM_Eff =(AM_AvRT + AM_pCorr)/2,
-                LOT_Eff =(LOT_AvRT + LOT_Accuracy)/2,
-                ERT_Eff =(ERT_AvRT + ERT_pCorr)/2,
-                MRT_Eff =(MRT_AvRT + MRT_pCorr)/2,
-                DSST_Eff =(DSST_AvRT + DSST_pCorr)/2,
-                BART_Eff =(BART_AvRT + BART_RiskScoreP)/2,
-                PVT_Eff =(PVT_Slowness + PVT_Accuracy)/2
+                MP_Eff = (MP_AvRT + MP_Accuracy) / 2,
+                VOLT_Eff =(VOLT_AvRT + VOLT_pCorr) / 2,
+                NBCK_Eff =(NBCK_AvRT + NBCK_Av_pCorr) / 2,
+                AM_Eff =(AM_AvRT + AM_pCorr) / 2,
+                LOT_Eff =(LOT_AvRT + LOT_Accuracy) / 2,
+                ERT_Eff =(ERT_AvRT + ERT_pCorr) / 2,
+                MRT_Eff =(MRT_AvRT + MRT_pCorr) / 2,
+                DSST_Eff =(DSST_AvRT + DSST_pCorr) / 2,
+                BART_Eff =(BART_AvRT + BART_RiskScoreP) / 2,
+                PVT_Eff =(PVT_Slowness + PVT_Accuracy) / 2
                 )
                 
 df_cognition &lt;- merge(df_cognition, tmp, by = c(&quot;ID&quot;, &quot;Battery&quot;, &quot;time.f&quot;))            
@@ -291,7 +300,10 @@ df_cognition &lt;- merge(df_cognition, tmp, by = c(&quot;ID&quot;, &quot;Battery
 colnames(df_cognition)[1] &lt;- &quot;id&quot;
 df_cognition$id &lt;- gsub(&quot;AGB_&quot;, &quot;&quot;, df_cognition$id) #clean
 df_cognition[c(1:3)] &lt;- lapply(df_cognition[c(1:3)], as.factor)
-df_cognition &lt;- as_tibble(df_cognition)</code></pre>
+df_cognition &lt;- as_tibble(df_cognition)
+
+#names(df_cognition)[names(df_cognition) == &quot;NBCK_Av_pCorr&quot;] &lt;- &quot;NBCK_pCorr&quot;
+#names(df_cognition)[names(df_cognition) == &quot;PVT_Slowness&quot;] &lt;- &quot;PVT_AvRT&quot;</code></pre>
 </div>
 <div id="write-to-excel-file" class="section level1">
 <h1>Write to Excel File</h1>

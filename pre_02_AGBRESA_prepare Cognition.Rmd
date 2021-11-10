@@ -25,7 +25,13 @@ print(sessionInfo())
 # Load Data
 ```{r Cognition}
 # read data
+
 df_cognition <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Cognition/AGBRESA Cognition Data Matrices.xlsx", sheet = "Matrix_AGBRESA_C_S")
+
+# Correct Battery number Note: original Battery number is not in correct order becauase battery order didnt seem tobe followed in some cases
+df_cognition$Battery <- rep( 1:15, 24)
+
+
 df_cognition <- df_cognition[c("ID", 
                                "Battery",
                                "MP_AvRT","MP_Accuracy",
@@ -40,6 +46,7 @@ df_cognition <- df_cognition[c("ID",
                                "PVT_Slowness","PVT_Accuracy")]
 
 df_cognition[c(1,2)] <- lapply(df_cognition[c(1,2)], factor)
+
 
 df_cognition$time.f <- revalue(df_cognition$Battery, c( "1" = "BDC-13",
                                                         "2" = "BDC-11",
@@ -58,21 +65,23 @@ df_cognition$time.f <- revalue(df_cognition$Battery, c( "1" = "BDC-13",
                                                         "15" = "R+12")) #relabel time.f
 
 df_cognition[c(2)] <- lapply(df_cognition[c(2)], as.numeric)
+
+# Drop fam sessiosn
 df_cognition <- subset(df_cognition, Battery > 2)
 names(df_cognition)
 df_cognition <- df_cognition[c(1,2,23,3:22)]
 
 tmp <- ddply(df_cognition, c("ID", "Battery", "time.f"), summarise,
-                MP_Eff = (MP_AvRT + MP_Accuracy)/2,
-                VOLT_Eff =(VOLT_AvRT + VOLT_pCorr)/2,
-                NBACK_Eff =(NBCK_AvRT + NBCK_Av_pCorr)/2,
-                AM_Eff =(AM_AvRT + AM_pCorr)/2,
-                LOT_Eff =(LOT_AvRT + LOT_Accuracy)/2,
-                ERT_Eff =(ERT_AvRT + ERT_pCorr)/2,
-                MRT_Eff =(MRT_AvRT + MRT_pCorr)/2,
-                DSST_Eff =(DSST_AvRT + DSST_pCorr)/2,
-                BART_Eff =(BART_AvRT + BART_RiskScoreP)/2,
-                PVT_Eff =(PVT_Slowness + PVT_Accuracy)/2
+                MP_Eff = (MP_AvRT + MP_Accuracy) / 2,
+                VOLT_Eff =(VOLT_AvRT + VOLT_pCorr) / 2,
+                NBCK_Eff =(NBCK_AvRT + NBCK_Av_pCorr) / 2,
+                AM_Eff =(AM_AvRT + AM_pCorr) / 2,
+                LOT_Eff =(LOT_AvRT + LOT_Accuracy) / 2,
+                ERT_Eff =(ERT_AvRT + ERT_pCorr) / 2,
+                MRT_Eff =(MRT_AvRT + MRT_pCorr) / 2,
+                DSST_Eff =(DSST_AvRT + DSST_pCorr) / 2,
+                BART_Eff =(BART_AvRT + BART_RiskScoreP) / 2,
+                PVT_Eff =(PVT_Slowness + PVT_Accuracy) / 2
                 )
                 
 df_cognition <- merge(df_cognition, tmp, by = c("ID", "Battery", "time.f"))            
@@ -82,6 +91,10 @@ colnames(df_cognition)[1] <- "id"
 df_cognition$id <- gsub("AGB_", "", df_cognition$id) #clean
 df_cognition[c(1:3)] <- lapply(df_cognition[c(1:3)], as.factor)
 df_cognition <- as_tibble(df_cognition)
+
+#names(df_cognition)[names(df_cognition) == "NBCK_Av_pCorr"] <- "NBCK_pCorr"
+#names(df_cognition)[names(df_cognition) == "PVT_Slowness"] <- "PVT_AvRT"
+
 ```
 # Write to Excel File
 ```{r export}

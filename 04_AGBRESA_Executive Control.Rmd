@@ -531,7 +531,7 @@ pdf("./Figures/Executive Control/p.dual_emmeans.pdf",
 print(p.dual_emmeans)
 dev.off()
 ```
-#### Figure 1. Dual Task: Effects of Bed Rest on Speed, Accuracy, and Efficiency on HDT59. Data are means and SE adjusted for baseline.
+#### Figure 1. Dual Task: Effects of Bed Rest on Speed, Accuracy, and Efficiency on R+1. Data are means and SE adjusted for baseline.
 ```{r, echo = FALSE, fig.width = 5, fig.height = 8, fig.cap = ""}
 print(p.dual_emmeans)
 ```
@@ -728,7 +728,8 @@ facet_grid_def <- facet_grid(.id ~ type,
 # Draw plot
 pd <- position_dodge(0.99)
 p.switch_emmeans <- func_plot_bar_facet(emm_fac %>%
-                                          mutate(group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
+                                          mutate(.id = fct_relevel(.id, "rt_z", "heading_error_z", "distance_z"),
+                                                 group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
 
 
 # Adjust legend size
@@ -744,6 +745,6 @@ dev.off()
 ```
 
 #### Figure 2. Switch Task: Effect of bed rest on speed, accuracy, and efficiency on R+1. Data are means and SE adjusted for baseline.
-```{r, echo = FALSE, fig.width = 5, fig.height = 8, fig.cap = ""}
+```{r, echo = FALSE, fig.width = 4, fig.height = 8, fig.cap = ""}
 print(p.switch_emmeans)
 ```

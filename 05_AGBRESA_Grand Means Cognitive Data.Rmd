@@ -1,0 +1,1530 @@
+---
+title: "AGBRESA Extract Cognitive Data"
+author: "A Stahn"
+date: "11/08/2021"
+output: html_document
+---
+```{r include = FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+# Prepare Script
+## Required Packages
+```{r load required packages, message = FALSE}
+library(knitr) # for kable
+library(readxl) # read xls
+library(DT) # Print table nicely in markdown
+library(reshape2) # wide to long
+library(plyr) # ldply
+library(tidyverse) # for fct_relevel
+
+library(lme4) # for adding mixed model functions to plot
+library(lmerTest) # for adding mixed model functions to plot
+library(nlme)
+library(emmeans) # for adding mixed model marignal means and se to plot
+library(qdapTools) # list_df2df(tbl_mm_fac_aov)
+
+library(ggpubr) # for compare means, descriptives and theme_pubr
+library(ggplot2)
+library(ggsci)
+library(scales)
+library(cowplot) # for plot_grid, combine plots using cowplot
+```
+## Print Session Info
+```{r print R and package versions}
+print(sessionInfo())
+```
+## Themes for Plots
+```{r create themes and correction factors}
+# Correct ggplot2 pts and fonts
+ggplot_factor_line <- ggplot2::.pt*72.27/96
+ggplot_factor_font = 1.0
+
+# Create project report theme
+theme_report_white  <-  theme_pubr() + theme(
+  axis.line = element_line(size = 0.5 / ggplot_factor_line,color="black"),
+  axis.ticks = element_line(size = 0.5 / ggplot_factor_line, color="black"),
+  axis.ticks.length = unit(0.2, "cm"), 
+  text = element_text(size = 8 * ggplot_factor_font,
+                      family="Helvetica",
+                      colour="black"),
+  axis.text.x=element_text(angle = 0, 
+                           vjust = 0.5,
+                           size = 8 * ggplot_factor_font,
+                           family = "Helvetica",
+                           colour = "black"), #face="bold"
+  axis.text.y = element_text(angle = 0,
+                            vjust=0.5,
+                            size= 8 * ggplot_factor_font,
+                            family = "Helvetica",
+                            colour="black"),
+  axis.title.x = element_text(angle = 0,
+                            vjust =0.5,
+                            size= 8 * ggplot_factor_font,
+                            family="Helvetica",
+                            colour="black",
+                            face="bold"),
+  axis.title.y = element_text(angle = 90,
+                            vjust = 0.5,
+                            size= 8 * ggplot_factor_font,
+                            family = "Helvetica",
+                            colour = "black",
+                            face = "bold") # face = "bold" 
+  )
+```
+# Definition of Helper Functions 
+## Descriptive Functions
+```{r functions for descriptive stats}
+# Function to compute descriptives
+func_desc <- function(data, ...) {
+  df_tmp <- df_demo[ , !names(df_demo) %in% c("age","height", "weight")]
+  data <- merge(df_tmp, data, by = "id") #add demo
+  data <- reshape2::melt( data, 
+                              id.vars = names( Filter(is.factor, data) )
+                              )
+  groups <- enquos(...)
+  
+  result <- data %>%
+    
+    group_by(!!!groups) %>%
+    
+    dplyr::summarise(
+      MEAN = mean(value, na.rm = T),
+      SE = sd(value, na.rm = T) / sqrt(length(value) )
+      )
+  return(result)
+}
+
+func_bdc_correction <- function(data, ...) {
+
+  df_tmp <- data %>%
+    subset(time.f == "BDC-6" | time.f == "BDC-7" |time.f == "BDC-9") %>%
+    group_by(group_3) %>%
+    dplyr::summarise(
+      mean_bdc_by_group = mean(MEAN, na.rm = T)
+      )
+  
+  df_tmp <- merge(df_tmp, data, by = "group_3")
+  df_tmp %>%
+    mutate(MEAN_corr = case_when(time.f == "BDC-6" | time.f == "BDC-7" | time.f == "BDC-9" ~
+                              MEAN-mean_bdc_by_group,
+                            TRUE ~ MEAN)) %>%
+    select( c(!mean_bdc_by_group & !MEAN) ) %>%
+    rename(MEAN = MEAN_corr)
+}
+```
+## Plot Functions
+```{r functions for plots}
+# Wrapper function for line plots, forwards to func_plot_line_facet
+func_plot_line <- function(x) {ggplot(x, tmpaes_plot) + 
+    theme_report_white +
+    geom_line(position = pd) +
+    geom_errorbar(tmpaes_errorbar,
+                  width =.4, 
+                  position = pd) +
+    geom_point(position = pd,
+               shape = 21,
+               size = 2) + #shape = 21, size = 1, fill = "white"
+    scale_y_continuous(expand = c(0,0)) +
+    labs(y = "", x = "Time", size = 10) +
+    theme(legend.title = element_blank(),
+          legend.text = element_text(size = 8),
+          axis.title.x = element_text(size = 10))
+  }
+
+# Function for line plots, takes 'desc' as input
+func_plot_line_facet <- function(x) {func_plot_line(x) +
+    facet_grid_def +
+    theme(strip.placement = "outside",
+          strip.background = element_rect(color = "transparent",
+                                          fill = "transparent", size = 1.5,
+                                          linetype = "solid"),
+          strip.text = element_text(size = 10,
+                                    color = "black",
+                                    face = "bold"),
+          panel.spacing.y = unit(2, "lines"))
+}
+
+# Function for bar plots, forwards to func_plot_bar_facet
+func_plot_bar <- function(x) {ggplot(x, tmpaes_plot) + theme_report_white +
+    geom_hline(yintercept = 0,
+               size = 0.3,
+               linetype = "solid") +
+    geom_errorbar(tmpaes_errorbar,
+                 width = .4,
+                  position = pd,
+                  color = "black") +
+    geom_bar(tmpaes_geombar, # separate by category
+             stat = "identity", 
+             position = pd,
+             width = 1.0,
+             color = "black") + # make it side-by-side
+    scale_y_continuous(expand = c(0,0)) +
+    labs(y = "", x = "", size = 10) +
+    guides(x = "none") +
+    theme(legend.title = element_blank(),
+          legend.text = element_text(size=8),
+          axis.title.x = element_text(size = 10),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank())
+}
+
+# Function for bar plots, takes 'desc*' as input
+func_plot_bar_facet <- function(x) {func_plot_bar(x) +
+    facet_grid_def +
+    theme(strip.placement = "outside",
+          strip.background = element_rect(color = "transparent",
+                                          fill = "transparent", size = 1.5,
+                                          linetype = "solid"),
+          strip.text = element_text(size = 10,
+                                    color = "black",
+                                    face = "bold"),
+          panel.spacing.y = unit(2, "lines"))
+}
+```
+## Functions for Mixed Models
+```{r functions for mixed models}
+# Wrapper for appending bdc data as covariate
+func_bdc_cov <- function(data, ...) {
+  
+  df_tmp <- subset(data, time.f != bdc)
+  
+  df_tmp_pre <- subset(data, time.f == bdc) %>%
+    rename_at(vars(contains("_z")), ~ str_c("pre_", .)) %>%
+    select("id" | is.numeric)
+  
+  df_tmp <- merge(df_tmp_pre, df_tmp, by = "id")
+  droplevels(df_tmp)
+  
+  df_tmp <- merge(df_demo, df_tmp,by  = c("id")) 
+}
+
+func_bdc_cov_mult_all <- function(data, ...) {
+  
+  df_tmp <- subset(data, time.n > bdc )
+  
+  groups <- enquos(...)
+  
+  df_tmp_pre <- subset(data, time.n < (bdc+1) ) %>%
+    
+    group_by(!!!groups) %>%
+    
+    dplyr::summarise(
+      rt_z = mean(rt_z, na.rm = T),
+      acc_z = mean(acc_z, na.rm = T),
+      eff_z = mean(eff_z, na.rm = T)
+      ) %>%
+    
+    rename_at(vars(contains("_z")), ~ str_c("pre_", .))
+    #select("id" | is.numeric)
+  
+  df_tmp <- merge(df_tmp_pre, df_tmp, by = c("id") )
+  droplevels(df_tmp)
+ 
+  df_tmp <- merge(df_demo[c(1,3,5:6)], df_tmp, by  = c("id")) 
+}
+
+# Wrapper for mixed models, takes 'dvList', requires 'model_mm', e.g., model_mm <- paste0(" + sex"," + age", " + time.f",  " * group_3", " * cond.f", " + (1|id)" )
+func_mm_fac_with_bdc_adj_help <- function(dvList) {
+  map(dvList, function(i) {
+    lmerTest::lmer(paste0(i, " ~ pre_", i, model_mm),
+                   REML = T,
+                   data = df_tmp)
+   }) %>% setNames(dvList) #add dvList names
+}
+
+func_mm_fac_help <- function(dvList) {
+  map(dvList, function(i) {
+    lmerTest::lmer(paste0(i, " ~ ", model_mm),
+                   REML = T,
+                   data = df_tmp)
+   }) %>% setNames(dvList) #add dvList names
+}
+
+
+# Function for creating mixed model tables, takes 'dvList'
+func_tbl_aov <- function(x) {
+  tbl_mm_fac_aov <- list_df2df(tbl_mm_fac_aov)
+  names(tbl_mm_fac_aov)[4] <- "df1"
+  names(tbl_mm_fac_aov)[5] <- "df2"
+  names(tbl_mm_fac_aov)[6] <- "F"
+  names(tbl_mm_fac_aov)[7] <- "P"
+  tbl_mm_fac_aov[c(5:6)] <- round(tbl_mm_fac_aov[c(5:6)], digits = 2) # Round
+  tbl_mm_fac_aov[c(7)] <- round(tbl_mm_fac_aov[c(7)], digits = 3) # Round
+  return(tbl_mm_fac_aov)
+}
+
+# Function emmeans, takes 'dvList'; requires to define 'model', e.g., model <- c(~ time.f * group_3 * cond.f); also requires 'func_mm_fac_with_bdc_adj_help'
+func_emm_fac_with_bdc_adj <- function(x) {
+  mm_fac <- func_mm_fac_with_bdc_adj_help(dvList)
+  emm_fac <- lapply(mm_fac, function(mm_fac) emmeans::emmeans(mm_fac, model_emmeans, lmer.df = "satterthwaite"))
+  emm_fac_ <- lapply(emm_fac, data.frame)
+  table_emm_fac_df <- ldply(emm_fac_, data.frame) #create df
+  table_emm_fac_df_raw <- table_emm_fac_df
+  table_emm_fac_df_raw$.id <- as.factor(as.character(table_emm_fac_df_raw$.id ))
+  rm(emm_fac_)
+  return(table_emm_fac_df_raw)
+}
+
+func_emm_fac <- function(x) {
+  mm_fac <- func_mm_fac_help(dvList)
+  emm_fac <- lapply(mm_fac, function(mm_fac) emmeans::emmeans(mm_fac, model_emmeans, lmer.df = "satterthwaite"))
+  emm_fac_ <- lapply(emm_fac, data.frame)
+  table_emm_fac_df <- ldply(emm_fac_, data.frame) #create df
+  table_emm_fac_df_raw <- table_emm_fac_df
+  table_emm_fac_df_raw$.id <- as.factor(as.character(table_emm_fac_df_raw$.id ))
+  rm(emm_fac_)
+  return(table_emm_fac_df_raw)
+}
+
+
+# Helper function contrasts emmeans, takes 'dvList'; also requires 'func_mm_fac_with_bdc_adj_help'
+func_contrasts_emm_fac_with_bdc_adj <- function(x) {
+  mm_fac <- func_mm_fac_with_bdc_adj_help(dvList)
+  emm_fac <- lapply(mm_fac, function(mm_fac) emmeans::emmeans(mm_fac, model_emmeans, lmer.df = "satterthwaite"))
+  contrasts_mm_fac <- lapply(emm_fac, function(emm_fac) contrast(emm_fac, contrast_type,
+                                                                         by = factors,
+                                                                         lmer.df = "satterthwaite",
+                                                                         adjust = "none"))
+  contrasts_mm_fac <- lapply(contrasts_mm_fac, summary, infer=T) #add adj confidence intervals (adjusted if adjustment method is selected: https://cran.r-project.org/web/packages/emmeans/vignettes/confidence-intervals.html)
+  contrasts_mm_fac_ <- lapply(contrasts_mm_fac, data.frame) #create df
+  contrasts_mm_fac_df <- ldply(contrasts_mm_fac_, data.frame) #create df
+  rm(contrasts_mm_fac_)
+  return(contrasts_mm_fac_df)
+}
+
+func_contrasts_emm_fac <- function(x) {
+  mm_fac <- func_mm_fac_help(dvList)
+  emm_fac <- lapply(mm_fac, function(mm_fac) emmeans::emmeans(mm_fac, model_emmeans, lmer.df = "satterthwaite"))
+  contrasts_mm_fac <- lapply(emm_fac, function(emm_fac) contrast(emm_fac, contrast_type,
+                                                                         by = factors,
+                                                                         lmer.df = "satterthwaite",
+                                                                         adjust = "none"))
+  contrasts_mm_fac <- lapply(contrasts_mm_fac, summary, infer=T) #add adj confidence intervals (adjusted if adjustment method is selected: https://cran.r-project.org/web/packages/emmeans/vignettes/confidence-intervals.html)
+  contrasts_mm_fac_ <- lapply(contrasts_mm_fac, data.frame) #create df
+  contrasts_mm_fac_df <- ldply(contrasts_mm_fac_, data.frame) #create df
+  rm(contrasts_mm_fac_)
+  return(contrasts_mm_fac_df)
+}
+
+
+# Function for creating table of contrasts emmeans, takes 'dvList', and requires 'func_contrasts_emm_fac_with_bdc_adj'
+func_tbl_contr_emm_fac_with_bdc_adj <- function(dvList) {
+  tmp <- func_contrasts_emm_fac_with_bdc_adj(dvList)
+  tmp[ncol(tmp)] <- round(tmp[ncol(tmp)], digits = 3) #round
+  tmp[ncol(tmp)-1] <- round(tmp[ncol(tmp)-1], digits = 2) #round
+  tmp[ncol(tmp)-2] <- round(tmp[ncol(tmp)-2], digits = 2) #round
+  tmp[ncol(tmp)-3] <- round(tmp[ncol(tmp)-3], digits = 2) #round
+  tmp[ncol(tmp)-4] <- round(tmp[ncol(tmp)-4], digits = 1) #round
+  tmp[ncol(tmp)-5] <- round(tmp[ncol(tmp)-5], digits = 2) #round
+  tmp[ncol(tmp)-6] <- round(tmp[ncol(tmp)-6], digits = 2) #round
+  tmp$CI <- paste0("(",tmp$lower.CL,"," ,tmp$upper.CL,")")
+  tmp$CI <- gsub( ",", ", ", tmp$CI ) 
+  tmp$CI <- paste0(tmp$estimate," " ,tmp$CI)
+  tmp <- tmp[-c(ncol(tmp)-3,
+                ncol(tmp)-4,
+                ncol(tmp)-6,
+                ncol(tmp)-7)]
+  colnames(tmp)[ncol(tmp)] <- "Mean (95%CI)"
+  colnames(tmp)[ncol(tmp)-1] <- "P (unadjusted)"
+  colnames(tmp)[ncol(tmp)-2] <- "t"
+  colnames(tmp)[2] <- "Contrast"
+  return(tmp)
+}
+
+# Function for creating table of contrasts emmeans, takes 'dvList', and requires 'func_contrasts_emm_fac_with_bdc_adj'
+func_tbl_contr_emm_fac <- function(dvList) {
+  tmp <- func_contrasts_emm_fac(dvList)
+  tmp[ncol(tmp)] <- round(tmp[ncol(tmp)], digits = 3) #round
+  tmp[ncol(tmp)-1] <- round(tmp[ncol(tmp)-1], digits = 2) #round
+  tmp[ncol(tmp)-2] <- round(tmp[ncol(tmp)-2], digits = 2) #round
+  tmp[ncol(tmp)-3] <- round(tmp[ncol(tmp)-3], digits = 2) #round
+  tmp[ncol(tmp)-4] <- round(tmp[ncol(tmp)-4], digits = 1) #round
+  tmp[ncol(tmp)-5] <- round(tmp[ncol(tmp)-5], digits = 2) #round
+  tmp[ncol(tmp)-6] <- round(tmp[ncol(tmp)-6], digits = 2) #round
+  tmp$CI <- paste0("(",tmp$lower.CL,"," ,tmp$upper.CL,")")
+  tmp$CI <- gsub( ",", ", ", tmp$CI ) 
+  tmp$CI <- paste0(tmp$estimate," " ,tmp$CI)
+  tmp <- tmp[-c(ncol(tmp)-3,
+                ncol(tmp)-4,
+                ncol(tmp)-6,
+                ncol(tmp)-7)]
+  colnames(tmp)[ncol(tmp)] <- "Mean (95%CI)"
+  colnames(tmp)[ncol(tmp)-1] <- "P (unadjusted)"
+  colnames(tmp)[ncol(tmp)-2] <- "t"
+  colnames(tmp)[2] <- "Contrast"
+  return(tmp)
+}
+
+
+# nlme
+# Wrapper for mixed models, takes 'dvList', requires 'model_mm', e.g., model_mm <- paste0(" + sex"," + age", " + time.f",  " * group_3", " * cond.f", " + (1|id)" )
+func_mm_fac_help_nlme <- function(dvList) {
+  map(dvList, function(i) {
+    f <- formula(paste(i, pred, sep = "~"))
+    mm <- lme(fixed = f,
+              random = ~ 1 | id,
+              data = df_tmp)
+    mm$call$fixed <- f
+    mm}) %>% setNames(dvList)
+}
+
+# Helper functions for creating mixed model tables, takes 'dvList'
+func_tbl_aov_nlme <- function(x) {
+  tbl_mm_fac_aov <- list_df2df(tbl_mm_fac_aov)
+  names(tbl_mm_fac_aov)[2] <- "df1"
+  names(tbl_mm_fac_aov)[3] <- "df2"
+  names(tbl_mm_fac_aov)[4] <- "F"
+  names(tbl_mm_fac_aov)[5] <- "P"
+  tbl_mm_fac_aov[c(4)] <- round(tbl_mm_fac_aov[c(4)], digits = 2) # Round
+  tbl_mm_fac_aov[c(5)] <- round(tbl_mm_fac_aov[c(5)], digits = 3) # Round
+  return(tbl_mm_fac_aov)
+}
+
+
+# Helper function emmeans, takes 'dvList'; requires to define 'model', e.g., model <- c(~ time.f * group_3 * cond.f)
+func_emm_fac_nlme <- function(x) {
+  mm_fac <- func_mm_fac_help_nlme(dvList)
+  emm_fac <- lapply(mm_fac, function(mm_fac) emmeans::emmeans(mm_fac, model_emmeans, lmer.df = "satterthwaite"))
+  emm_fac_ <- lapply(emm_fac, data.frame)
+  table_emm_fac_df <- ldply(emm_fac_, data.frame) #create df
+  table_emm_fac_df_raw <- table_emm_fac_df
+  table_emm_fac_df_raw$.id <- as.factor(as.character(table_emm_fac_df_raw$.id ))
+  rm(emm_fac_)
+  return(table_emm_fac_df_raw)
+}
+
+# Function for contrasts, requires 'func_mm_fac_help'
+func_contrasts_emm_fac_nlme <- function(x) {
+  mm_fac <- func_mm_fac_help_nlme(dvList)
+  emm_fac <- lapply(mm_fac, function(mm_fac) emmeans::emmeans(mm_fac, model_emmeans, lmer.df = "satterthwaite"))
+  contrasts_mm_fac <- lapply(emm_fac, function(emm_fac) contrast(emm_fac, contrast_type,
+                                                                         by = factors,
+                                                                         lmer.df = "satterthwaite",
+                                                                         adjust="none"))
+  contrasts_mm_fac <- lapply(contrasts_mm_fac, summary, infer = T) #add adj confidence intervals (adjusted if adjustment method is selected: https://cran.r-project.org/web/packages/emmeans/vignettes/confidence-intervals.html)
+  contrasts_mm_fac_ <- lapply(contrasts_mm_fac, data.frame) #create df
+  contrasts_mm_fac_df <- ldply(contrasts_mm_fac_, data.frame) #create df
+  rm(contrasts_mm_fac_)
+  return(contrasts_mm_fac_df)
+}
+
+# Helper function contrasts emmeans, takes 'dvList', and requires func_contrasts_emm_fac_nlme
+func_tbl_contr_emm_fac_nlme <- function(dvList) {
+  tmp <- func_contrasts_emm_fac_nlme(dvList)
+  tmp[ncol(tmp)] <- round(tmp[ncol(tmp)], digits = 3) #round
+  tmp[ncol(tmp)-1] <- round(tmp[ncol(tmp)-1], digits = 2) #round
+  tmp[ncol(tmp)-2] <- round(tmp[ncol(tmp)-2], digits = 2) #round
+  tmp[ncol(tmp)-3] <- round(tmp[ncol(tmp)-3], digits = 2) #round
+  tmp[ncol(tmp)-4] <- round(tmp[ncol(tmp)-4], digits = 1) #round
+  tmp[ncol(tmp)-5] <- round(tmp[ncol(tmp)-5], digits = 2) #round
+  tmp[ncol(tmp)-6] <- round(tmp[ncol(tmp)-6], digits = 2) #round
+  tmp$CI <- paste0("(",tmp$lower.CL,"," ,tmp$upper.CL,")")
+  tmp$CI <- gsub( ",", ", ", tmp$CI ) 
+  tmp$CI <- paste0(tmp$estimate," " ,tmp$CI)
+  tmp <- tmp[-c(ncol(tmp)-3,
+                ncol(tmp)-4,
+                ncol(tmp)-6,
+                ncol(tmp)-7)]
+  colnames(tmp)[ncol(tmp)] <- "Mean (95%CI)"
+  colnames(tmp)[ncol(tmp)-1] <- "P (unadjusted)"
+  colnames(tmp)[ncol(tmp)-2] <- "t"
+  colnames(tmp)[2] <- "Contrast"
+  return(tmp)
+}
+```
+## Load Data
+```{r load data}
+#  Demographics
+df_demo <- read_excel("./Data/Data Demographics.xlsx", sheet = "Data Demo")
+df_demo[c(1:5)] <- lapply(df_demo[c(1:5)], as.factor)
+
+# Spatial Cognition 1
+
+# SUT
+df_sut <- read_excel("./Data/Data Spatial Cognition 1 prout.xlsx", sheet = "Data SUT prout")
+df_sut[c(1:2,6)] <- lapply(df_sut[c(1:2,6)], as.factor)
+
+df_sut_45 <- read_excel("./Data/Data Spatial Cognition 1 prout.xlsx", sheet = "Data SUT prout 45")
+df_sut_45[c(1:2,6)] <- lapply(df_sut_45[c(1:2,6)], as.factor)
+
+# PTO
+df_pto <- read_excel("./Data/Data Spatial Cognition 1 prout.xlsx", sheet = "Data PTO prout")
+df_pto[c(1:2,7)] <- lapply(df_pto[c(1:2,7)], as.factor)
+
+df_pto_5 <- read_excel("./Data/Data Spatial Cognition 1 prout.xlsx", sheet = "Data PTO prout 5")
+df_pto_5[c(1:2,7)] <- lapply(df_pto_5[c(1:2,7)], as.factor)
+df_pto_5[c(1:2,7)] <- lapply(df_pto_5[c(1:2,7)], as.factor)
+
+# 4MTN
+df_4mtn <- read_excel("./Data/Data Spatial Cognition 1 prout.xlsx", sheet = "Data 4MTN prout")
+df_4mtn[c(1:2,6)] <- lapply(df_4mtn[c(1:2,6)], as.factor)
+
+# NAVIS 2D
+df_navis_2d <- read_excel("./Data/Data Spatial Cognition 1 prout.xlsx", sheet = "Data NAVIS 2D prout")
+df_navis_2d[c(1:2,8)] <- lapply(df_navis_2d[c(1:2,8)], as.factor)
+
+df_navis_2d_night <- read_excel("./Data/Data Spatial Cognition 1 prout.xlsx", sheet = "Data NAVIS 2D prout Night")
+df_navis_2d_night[c(1:2,8)] <- lapply(df_navis_2d_night[c(1:2,8)], as.factor)
+
+# Spatial Cognition 2
+
+# SOT
+df_sot <- read_excel("./Data/Data Spatial Cognition 2 prout.xlsx", sheet = "Data SOT prout")
+df_sot[c(1:2,6)] <- lapply(df_sot[c(1:2,6)], as.factor)
+
+# Cognitive Mapping
+df_cogmap <- read_excel("./Data/Data Spatial Cognition 2 prout.xlsx", sheet = "Data Cognitive Mapping prout")
+df_cogmap[c(1:2,6)] <- lapply(df_cogmap[c(1:2,6)], as.factor)
+
+# Water Maze
+df_wm <- read_excel("./Data/Data Spatial Cognition 2 prout.xlsx", sheet = "Data WM prout")
+df_wm[c(1:2,7)] <- lapply(df_wm[c(1:2,7)], as.factor)
+
+
+# Plus Maze
+df_pm <- read_excel("./Data/Data Spatial Cognition 2 prout.xlsx", sheet = "Data PM prout")
+df_pm[c(1:2,6)] <- lapply(df_pm[c(1:2,6)], as.factor)
+
+# Navigation Strategy
+df_navstrat <- read_excel("./Data/Data Spatial Cognition 2 prout.xlsx", sheet = "Data Navstrat Avr prout")
+df_navstrat[c(1:2,6)] <- lapply(df_navstrat[c(1:2,6)], as.factor)
+
+df_navstrat_same <- read_excel("./Data/Data Spatial Cognition 2 prout.xlsx", sheet = "Data Navstrat Same prout")
+df_navstrat_same[c(1:2,6)] <- lapply(df_navstrat_same[c(1:2,6)], as.factor)
+
+df_navstrat_diff <- read_excel("./Data/Data Spatial Cognition 2 prout.xlsx", sheet = "Data Navstrat Diff prout")
+df_navstrat_diff[c(1:2,6)] <- lapply(df_navstrat_diff[c(1:2,6)], as.factor)
+
+# NAVIS VR
+df_navis_vr <- read_excel("./Data/Data Spatial Cognition 2 prout.xlsx", sheet = "Data NAVIS VR prout")
+df_navis_vr[c(1:2,8)] <- lapply(df_navis_vr[c(1:2,8)], as.factor)
+
+# Executive Control
+# Dual Task
+df_dual <- read_excel("./Data/Data Executive Control prout.xlsx", sheet = "Data Dual prout")
+df_dual[c(1:2,6)] <- lapply(df_dual[c(1:2,6)], as.factor)
+
+# Switch Task
+df_switch <- read_excel("./Data/Data Executive Control prout.xlsx", sheet = "Data Switch prout")
+df_switch[c(1:2,6)] <- lapply(df_switch[c(1:2,6)], as.factor)
+
+# Cognition
+df_cognition <- read_excel("./Data/Data Cognition Avr prout.xlsx", sheet = "Data Cognition Avr prout")
+df_cognition[c(1:2)] <- lapply(df_cognition[c(1:2)], as.factor)
+
+```
+# Spatial Cognition Battery 1
+## Overall score
+```{r overall score spacog_1}
+# Define primary outcomes
+df_pto_v1 <- df_pto[-c(3)] 
+df_pto_v2 <- df_pto[-c(5)] 
+colnames(df_pto_v2)[3] <- "acc_z"
+df_pto_v2$eff_z <- (df_pto_v2$rt_z + df_pto_v2$acc_z) / 2
+  
+df_navis_2d_v1 <- df_navis_2d[-c(5,7)] 
+colnames(df_navis_2d_v1)[4] <- "acc_z"
+colnames(df_navis_2d_v1)[5] <- "eff_z"
+
+df_navis_2d_v2 <- df_navis_2d[-c(4,6)] 
+colnames(df_navis_2d_v2)[4] <- "acc_z"
+colnames(df_navis_2d_v2)[5] <- "eff_z"
+
+# Combine tasks in one variable
+df_spacog_1 <- rbind(df_4mtn, df_sut, df_pto_v1, df_navis_2d_v2)
+```
+## Plot Time Course adjusted for Baseline 
+```{r plot time course adjusted for baseline spacog_1}
+# Mean across tasks
+desc <- func_desc(df_spacog_1, group_3, time.f, variable)
+
+# Plot desc
+# New facet label names for variable
+new_labels <- c("Speed","Accuracy","Efficiency")
+names(new_labels) <- c("rt_z","acc_z", "eff_z")
+
+# Define aes for func_plot
+tmpaes_plot <- aes(x = time.f, y = MEAN,
+                   group = group_3,
+                   fill = group_3,
+                   color = group_3)
+
+tmpaes_errorbar <- aes(x = time.f,
+                    ymin = MEAN-SE, 
+                    ymax = MEAN+SE)
+
+# Define labels for func_plot_line_facet
+labeller_def <- labeller(variable = new_labels)
+
+facet_grid_def <- facet_grid(variable ~.,
+                             switch = "y",
+                             labeller = labeller_def) 
+
+# Draw plot
+pd <- position_dodge(0.3)
+p.spacog_1_desc <- func_plot_line_facet(desc %>%
+                                     mutate(time.f = fct_relevel(time.f, "BDC-3", "HDT2", "HDT30", "HDT59", "R+12"),
+                                            variable = fct_relevel(variable, "rt_z","acc_z", "eff_z"),
+                                            group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
+
+# Add zero line
+p.spacog_1_desc <- p.spacog_1_desc + geom_hline(yintercept = 0, size = 0.3, linetype = "dotted")
+
+# Adjust legend size
+p.spacog_1_desc <- p.spacog_1_desc + theme(legend.key.size = unit(0.3, "cm"))
+
+```
+
+## Mixed Model Time x Group Interaction 
+```{r mixed model for time x group spacog_1}
+# Mean across tasks
+df_tmp <- func_desc(df_spacog_1, id, group_3, time.f, variable)
+df_tmp <- df_tmp[-c(2,6)]
+df_tmp <- reshape2::dcast(df_tmp, id + time.f ~ variable, value.var = "MEAN")
+
+# Add baseline as cov
+bdc <- "BDC-3"
+df_tmp <-  func_bdc_cov(df_tmp)
+
+# Select dep vars
+dvList <- c("rt_z","acc_z", "eff_z")
+
+# Define model
+model_mm <- paste0(" + sex"," + age", " + time.f",  " * group_3", " + (1|id)" )
+
+# Run mixed models
+tbl_mm_fac_aov <- sapply(func_mm_fac_with_bdc_adj_help(dvList), anova, simplify = FALSE, USE.NAMES = TRUE) 
+
+# ANOVA table 
+tbl_mm_fac_aov_df <- func_tbl_aov(dvList)
+
+# Helper functions for parameter definition in mixed model tables, takes 'dvList'
+Parameter_func <- function(dvList){
+  rep(c(
+  "Baseline",
+  "Sex",
+  "Age",
+  "Time",
+  "Group",
+  "Time x Group"),
+                 length(dvList))
+}
+
+# Add variables
+Parameter <- Parameter_func(dvList)
+blanks <- rep("", length(Parameter) / length(dvList) - 1)
+Variable <- c("Speed", blanks,"Accuracy", blanks, "Efficiency", blanks)
+tbl_mm_fac_aov_df_spacog_1 <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
+```
+#### Table 2. Mixed Model Summary for Spatial Cognition Battery 1.
+```{r echo = FALSE}
+# Print table
+datatable(tbl_mm_fac_aov_df_spacog_1, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P"), digits = 3) %>%
+  formatRound(columns = c("df2", "F"), digits = 1)
+```
+
+## Contrasts for Comparing Groups at Each Time Point During Bed Rest
+```{r contrasts for groups by time spacog_1}
+# Contrasts
+# Define model for contrasts
+model_emmeans <- ~ time.f * group_3
+
+# Define contrasts
+contrast_type <- "pairwise"
+factors <- c("time.f")
+
+# Run contrasts
+tbl_contr_emm_fac_df <- func_tbl_contr_emm_fac_with_bdc_adj(dvList)
+
+# Create vars to make nice table
+tmp_n_dvs <- length(levels(tbl_contr_emm_fac_df$Contrast)) * 
+  length(levels(tbl_contr_emm_fac_df$time.f)) -1
+tmp_n_cond <- length(levels(tbl_contr_emm_fac_df$Contrast)) * 
+  length(levels(tbl_contr_emm_fac_df$time.f)) - 1
+tmp_n_time <- length(levels(tbl_contr_emm_fac_df$Contrast)) - 1
+
+
+tbl_contr_emm_fac_df$Variable <- c("Speed", rep("", tmp_n_dvs),
+                                   "Accuracy", rep("", tmp_n_dvs),
+                                   "Efficiency", rep("", tmp_n_dvs))
+
+tbl_contr_emm_fac_df$Time <- rep ( c("HDT2", rep("", tmp_n_time),
+                                     "HDT30", rep("", tmp_n_time),
+                                     "HDT59", rep("", tmp_n_time),
+                                     "R+12", rep("", tmp_n_time)),
+                                   length(dvList) )
+
+#table_contrasts_emm_fac_by_time_df$Contrast <- rep(c("cAG vs. CTRL","iAG vs. CTRL", "cAG vs. iAG"), length(dvList))
+
+# Ttble for contrasts
+tbl_contr_emm_fac_df_spacog_1 <- tbl_contr_emm_fac_df[c(8:9, 2, 7, 4:6)]
+```
+#### Table 3. Mixed Model Group Contrasts for Spatial Cognition Battery 1.
+```{r echo = FALSE}
+# Print table 
+datatable(tbl_contr_emm_fac_df_spacog_1, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
+  formatRound(columns = c("df", "t"), digits = 1)
+```
+
+## Plot Estimated Marignal Means To Show Time Course for Each Group
+```{r plot emmeans for groups by time spacog_1}
+# Define model for emmeans
+model_emmeans <- ~ time.f * group_3
+
+# Run emmeans
+emm_fac <- func_emm_fac_with_bdc_adj(dvList) 
+
+# Plot emmeans 
+# New facet label names for variable
+new_labels <- c("Speed","Accuracy","Efficiency")
+names(new_labels) <- c("rt_z","acc_z", "eff_z")
+
+# Define aes for func_plot
+tmpaes_plot <- aes(x = time.f, y = emmean,
+                   group = group_3,
+                   fill = group_3,
+                   color = group_3)
+
+tmpaes_errorbar <- aes(x = time.f,
+                    ymin = emmean-SE, 
+                    ymax = emmean+SE)
+
+# Define labels for func_plot_line_facet
+labeller_def <- labeller(.id = new_labels)
+
+facet_grid_def <- facet_grid(~.id ,
+                             switch = "y",
+                             labeller = labeller_def) 
+
+# Draw plot
+pd <- position_dodge(0.3)
+p.spacog_1_emmeans <- func_plot_line_facet(emm_fac %>%
+                                        mutate(time.f = fct_relevel(time.f, "BDC-3", "HDT2", "HDT30", "HDT59", "R+12"),
+                                               .id = fct_relevel(.id, "rt_z","acc_z", "eff_z"),
+                                               group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
+
+# Add zero line
+p.spacog_1_emmeans <- p.spacog_1_emmeans + geom_hline(yintercept = 0, size = 0.3, linetype = "dotted")
+
+# Adjust legend size
+p.spacog_1_emmeans <- p.spacog_1_emmeans + theme(legend.key.size = unit(0.3, "cm"))
+```
+## Mixed Model for Main Effect of Bed Rest (excluding BDC)
+```{r mixed model for main effect group spacog_1}
+# Drop recovery
+df_tmp <- subset(df_tmp, time.f != "R+12") # Drop baseline
+df_tmp <- droplevels(df_tmp)
+
+# Select dep vars
+dvList <- c("rt_z","acc_z", "eff_z")
+
+# Define model
+model_mm <- paste0(" + sex"," + age", " + group_3", " + (1|id)" )
+
+# Run mixed models
+tbl_mm_fac_aov <- sapply(func_mm_fac_with_bdc_adj_help(dvList), anova, simplify = FALSE, USE.NAMES = TRUE) 
+
+# ANOVA table
+tbl_mm_fac_aov_df <- func_tbl_aov(dvList)
+
+# Helper functions for parameter definition in mixed model tables, takes 'dvList'
+Parameter_func <- function(dvList){
+  rep(c(
+  "Baseline",
+  "Sex",
+  "Age",
+  "Group"),
+                 length(dvList))
+}
+
+# Add variables
+Parameter <- Parameter_func(dvList)
+blanks <- rep("", length(Parameter) / length(dvList) - 1)
+Variable <- c("Speed", blanks,"Accuracy", blanks, "Efficiency", blanks)
+tbl_mm_fac_aov_df_spacog_1_main <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
+```
+#### Table 4. Mixed Model Summary testing the Main Effect of Group for Spatial Cognition Battery 1.
+```{r echo = FALSE}
+# Print table
+datatable(tbl_mm_fac_aov_df_spacog_1_main, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P"), digits = 3) %>%
+  formatRound(columns = c("df2", "F"), digits = 1)
+```
+## Contrasts for Comparing Groups
+```{r contrasts for groups spacog_1}
+# Define model for emmeans
+model_emmeans <- ~ group_3
+
+# Run emmeans
+emm_fac <- func_emm_fac_with_bdc_adj(dvList)
+
+# Contrasts
+# Define model for contrasts
+model_emmeans <- ~ group_3
+
+# Define contrasts
+contrast_type <- "trt.vs.ctrl"
+factors <- c()
+
+# Run contrasts
+tbl_contr_emm_fac_df <- func_tbl_contr_emm_fac_with_bdc_adj(dvList)
+
+# Create vars to make nice table
+tbl_contr_emm_fac_df$Variable <- c("Speed", rep("", 1),
+                                   "Accuracy", rep("", 1),
+                                   "Efficiency", rep("", 1))
+#table_contrasts_emm_fac_by_time_df$Contrast <- rep(c("cAG vs. CTRL","iAG vs. CTRL", "cAG vs. iAG"), length(dvList))
+
+# Table for contrasts
+tbl_contr_emm_fac_spacog_1_main <- tbl_contr_emm_fac_df[c(7, 2, 6, 3:5)]
+```
+#### Table 5. Mixed Model Contrasts Comparing Groups for Spatial Cognition Battery 1.
+```{r echo = FALSE}
+# Print table
+datatable(tbl_contr_emm_fac_spacog_1_main, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
+  formatRound(columns = c("df", "t"), digits = 1)
+```
+## Plot Estimated Marignal Means for Comparing Groups
+```{r plot groups spacog_1}
+# New facet label names for variable
+new_labels <- c("Speed","Accuracy","Efficiency")
+names(new_labels) <- c("rt_z","acc_z", "eff_z")
+
+# Define aes for func_plot
+tmpaes_plot <- aes(x = contrast,
+                   y = emmean,
+                   group = group_3,
+                   fill = group_3,
+                   color = group_3)
+
+tmpaes_errorbar <- aes(x = group_3,
+                    ymin = emmean-SE, 
+                    ymax = emmean+SE)
+
+tmpaes_geombar <- aes(x = group_3,
+                    y = emmean, 
+                    fill=group_3)
+
+# Define labels for func_plot_line_facet
+labeller_def <- labeller(.id = new_labels)
+
+facet_grid_def <- facet_grid(.id ~ .,
+                             switch = "y",
+                             scales = "free",
+                             labeller = labeller_def) 
+
+# Draw Plot 
+pd <- position_dodge(0.99)
+p.spacog_1_emmeans_main <- func_plot_bar_facet(emm_fac %>%
+                                            mutate(
+                                                   .id = fct_relevel(.id, "rt_z","acc_z", "eff_z"),
+                                                   group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG"))) 
+# Adjust legend size
+p.spacog_1_emmeans_main <- p.spacog_1_emmeans_main + theme(legend.key.size = unit(0.3, "cm"))
+```
+## Create Combined plot 
+```{r plot combined spacog_1}
+# Combine plot 
+p.spacog_1_comb <- plot_grid(p.spacog_1_desc, p.spacog_1_emmeans_main + rremove("x.text") + theme( strip.text.y = element_blank() ),
+                        labels = c("a", "b"),
+                        ncol = 2, nrow = 1,
+                        rel_widths = c(1.9, 1.1))
+
+# Adjust legend size
+p.spacog_1_comb <- p.spacog_1_comb + theme(legend.key.size = unit(0.3, "cm"))
+
+# Save plot as pdf
+pdf("./Figures/Spatial Cognition 1/p.spacog_1_comb.pdf",
+    width = 30/2.54, 
+    height = 20/2.54,
+    useDingbats = FALSE) #in cm
+print(p.spacog_1_comb)
+dev.off()
+```
+#### Figure 1. Spatial Cognition Battery 1: (a) Time course of speed, precision, and efficiency before, during, and after bed rest. (b) Main effect of bed rest. Data are means and SD adjusted for baseline.
+```{r, echo = FALSE, fig.width = 6, fig.height = 8, fig.cap = ""}
+print(p.spacog_1_comb)
+```
+
+# Spatial Cognition Battery 2
+## Overall score
+```{r overall score spacog_2}
+# Define primary outcomes
+df_wm_v1 <- df_wm[-c(4)] 
+colnames(df_wm_v1)[4] <- "acc_z"
+df_wm_v2 <- df_wm[-c(4)] 
+colnames(df_wm_v2)[4] <- "acc_z"
+df_wm_v2$eff_z <- (df_wm_v2$rt_z + df_wm_v2$acc_z) / 2
+
+df_navstrat_same 
+df_navstrat_diff
+df_navstrat
+
+df_navis_vr_v1 <- df_navis_vr[-c(5,7)] 
+colnames(df_navis_vr_v1)[4] <- "acc_z"
+colnames(df_navis_vr_v1)[5] <- "eff_z"
+
+df_navis_vr_v2 <- df_navis_vr[-c(4,6)] 
+colnames(df_navis_vr_v2)[4] <- "acc_z"
+colnames(df_navis_vr_v2)[5] <- "eff_z"
+
+# Combine tasks in one variable
+df_spacog_2 <- rbind(df_sot, df_cogmap, df_wm_v1, df_navstrat, df_navis_vr_v1)
+```
+#### Mixed Model Comparing Groups
+```{r echo = FALSE}
+# Drop BDC
+df_tmp <- subset(df_spacog_2, time.f != "BDC-6" &  time.f != "R+12")
+df_tmp <- droplevels(df_tmp)
+
+# Mean across tasks
+df_tmp <- func_desc(df_tmp, id, group_3, variable)
+df_tmp <- df_tmp[-c(5)]
+df_tmp <- reshape2::dcast(df_tmp, id  +  group_3 ~ variable, value.var = "MEAN")
+
+# Mixed Models
+# Add groups
+df_tmp <- merge(df_demo[c(1,3,5,6)], df_tmp, by = c("id", "group_3"))
+
+# Select dep vars
+dvList <- c("rt_z", "acc_z", "eff_z")
+
+# Select predictors
+pred <- c("sex + age + group_3")
+
+# Run mixed models
+tbl_mm_fac_aov <- sapply(func_mm_fac_help_nlme(dvList), anova, simplify = FALSE, USE.NAMES = TRUE) 
+
+# ANOVA table 
+tbl_mm_fac_aov_df <- func_tbl_aov_nlme(dvList)
+
+tbl_mm_fac_aov_df <- tbl_mm_fac_aov_df[-c(1, 5, 9),]
+
+# Helper functions for parameter definition in mixed model tables, takes 'dvList'
+Parameter_func <- function(dvList){
+  rep(c(
+  "Sex",
+  "Age",
+  "Group"),
+                 length(dvList))
+}
+
+# Add variables
+Parameter <- Parameter_func(dvList)
+blanks <- rep("", length(Parameter) / length(dvList) - 1)
+Variable <- c("Speed", blanks,"Accuracy", blanks, "Efficiency", blanks)
+tbl_mm_fac_aov_df_spacog_2 <- cbind(Variable, Parameter, tbl_mm_fac_aov_df)
+tbl_mm_fac_aov_df_spacog_2 <- tbl_mm_fac_aov_df_spacog_2[-c(3)]
+```
+
+#### Table 6. Mixed Model Summary for Spatial Cognition Battery 2.
+```{r echo = FALSE}
+# Print table
+datatable(tbl_mm_fac_aov_df_spacog_2, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P"), digits = 3) %>%
+  formatRound(columns = c("df2", "F"), digits = 1)
+```
+
+## Contrasts for Group Comparisons
+```{r contrasts between groups spacog_2}
+# Contrasts
+# Define model for contrasts
+model_emmeans <- ~ group_3
+
+# Define contrasts
+contrast_type <- "pairwise"
+factors <- c()
+
+# Run contrasts
+tbl_contr_emm_fac_df <- func_tbl_contr_emm_fac_nlme(dvList)
+
+
+# Create vars to make nice table
+tbl_contr_emm_fac_df$Variable <- c("Speed", rep("", 2),
+                                   "Accuracy", rep("", 2),
+                                   "Efficiency", rep("", 2))
+
+
+# Table for contrasts
+tbl_contr_emm_fac_df_spaccog_2 <- tbl_contr_emm_fac_df[c(7,2,6,3:5)]
+```
+#### Table 7. Mixed Model Group Contrasts for Spatial Cognition Battery 2.
+```{r echo = FALSE}
+# print table
+datatable(tbl_contr_emm_fac_df_spaccog_2, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns=c("P (unadjusted)"), digits = 3) %>%
+  formatRound(columns=c("df", "t"), digits = 1)
+```
+## Plot Estimated Marignal Means for Group Comparisons
+```{r plot emmeans by groups spacog_2}
+# Define model for emmeans
+model_emmeans <- ~ group_3
+
+# Run emmeans
+emm_fac <- func_emm_fac_nlme(dvList) 
+
+# Plot emmeans 
+# Define aes for func_plot
+tmpaes_plot <- aes(x = group_3, y = emmean,
+                   group = group_3,
+                   fill = group_3,
+                   color = group_3)
+
+tmpaes_errorbar <- aes(x = group_3,
+                    ymin = emmean-SE, 
+                    ymax = emmean+SE)
+
+tmpaes_geombar <- aes(x = group_3,
+                    y = emmean, 
+                    fill=group_3)
+
+# New facet label names for variable
+new_labels <- c("Speed","Accuracy","Efficiency")
+names(new_labels) <- c("rt_z", "acc_z","eff_z")
+
+# Define labels for func_plot_line_facet
+labeller_def <- labeller(.id = new_labels)
+
+facet_grid_def <- facet_grid(~ .id,
+                             switch = "y",
+                             labeller = labeller_def) 
+
+# Draw plot
+pd <- position_dodge(0.99)
+p.spacog_2_emmeans <- func_plot_bar_facet(emm_fac %>%
+                                        mutate(.id = fct_relevel(.id, "rt_z","acc_z", "eff_z"),
+                                          group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
+
+# Adjust legend size
+p.spacog_2_emmeans <- p.spacog_2_emmeans + theme(legend.key.size = unit(0.3, "cm"))
+
+# Save plot as pdf
+pdf("./Figures/Executive Control/p.spacog_2_emmeans.pdf",
+    width = 5/2.54,
+    height = 8/2.54,
+    useDingbats=FALSE) #in cm
+print(p.spacog_2_emmeans)
+dev.off()
+```
+#### Figure 2. Spatial Cognition Battery 2: Effects of Bed Rest on Speed, Accuracy, and Efficiency after Bed Rest. Data are means and SE.
+```{r, echo = FALSE, fig.width = 5, fig.height = 4, fig.cap = ""}
+print(p.spacog_2_emmeans)
+```
+# Executive Control
+## Overall score
+```{r overall score exe_ctrl}
+# Combine tasks in one variable
+df_exe_ctrl <- rbind(df_switch, df_dual)
+```
+
+## Comparing Groups
+```{r echo = FALSE}
+# Drop BDC
+df_tmp <- subset(df_exe_ctrl, time.f != "BDC-6")
+df_tmp <- droplevels(df_tmp)
+
+# Mean across tasks
+df_tmp <- func_desc(df_tmp, id, group_3, variable)
+df_tmp <- df_tmp[-c(5)]
+df_tmp <- reshape2::dcast(df_tmp, id  +  group_3 ~ variable, value.var = "MEAN")
+
+# Mixed Models
+# Add groups
+df_tmp <- merge(df_demo[c(1,3,5,6)], df_tmp, by = c("id", "group_3"))
+
+# Select dep vars
+dvList <- c("rt_z", "acc_z", "eff_z")
+
+# Select predictors
+pred <- c("sex + age + group_3")
+
+# Run mixed models
+tbl_mm_fac_aov <- sapply(func_mm_fac_help_nlme(dvList), anova, simplify = FALSE, USE.NAMES = TRUE) 
+
+# ANOVA table 
+tbl_mm_fac_aov_df <- func_tbl_aov_nlme(dvList)
+
+tbl_mm_fac_aov_df <- tbl_mm_fac_aov_df[-c(1, 5, 9),]
+
+# Helper functions for parameter definition in mixed model tables, takes 'dvList'
+Parameter_func <- function(dvList){
+  rep(c(
+  "Sex",
+  "Age",
+  "Group"),
+                 length(dvList))
+}
+
+# Add variables
+Parameter <- Parameter_func(dvList)
+blanks <- rep("", length(Parameter) / length(dvList) - 1)
+Variable <- c("Speed", blanks,"Accuracy", blanks, "Efficiency", blanks)
+tbl_mm_fac_aov_df_exe_ctrl <- cbind(Variable, Parameter, tbl_mm_fac_aov_df)
+tbl_mm_fac_aov_df_exe_ctrl <- tbl_mm_fac_aov_df_exe_ctrl[-c(3)]
+```
+
+#### Table 8. Mixed Model Summary for Executive Control Tasks.
+```{r echo = FALSE}
+# Print table
+datatable(tbl_mm_fac_aov_df_exe_ctrl, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P"), digits = 3) %>%
+  formatRound(columns = c("df2", "F"), digits = 1)
+```
+
+## Contrasts for Group Comparisons
+```{r contrasts between groups exe_ctrl}
+# Contrasts
+# Define model for contrasts
+model_emmeans <- ~ group_3
+
+# Define contrasts
+contrast_type <- "pairwise"
+factors <- c()
+
+# Run contrasts
+tbl_contr_emm_fac_df <- func_tbl_contr_emm_fac_nlme(dvList)
+
+
+# Create vars to make nice table
+tbl_contr_emm_fac_df$Variable <- c("Speed", rep("", 2),
+                                   "Accuracy", rep("", 2),
+                                   "Efficiency", rep("", 2))
+
+
+# Table for contrasts
+tbl_contr_emm_fac_df_exe_ctrl <- tbl_contr_emm_fac_df[c(7,2,6,3:5)]
+```
+#### Table 9. Mixed Model Group Contrasts for Executive Control Tasks.
+```{r echo = FALSE}
+# print table
+datatable(tbl_contr_emm_fac_df_exe_ctrl, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns=c("P (unadjusted)"), digits = 3) %>%
+  formatRound(columns=c("df", "t"), digits = 1)
+```
+## Plot Estimated Marignal Means for Group Comparisons
+```{r plot emmeans by groups exe_ctrl}
+# Define model for emmeans
+model_emmeans <- ~ group_3
+
+# Run emmeans
+emm_fac <- func_emm_fac_nlme(dvList) 
+
+# Plot emmeans 
+# Define aes for func_plot
+tmpaes_plot <- aes(x = group_3, y = emmean,
+                   group = group_3,
+                   fill = group_3,
+                   color = group_3)
+
+tmpaes_errorbar <- aes(x = group_3,
+                    ymin = emmean-SE, 
+                    ymax = emmean+SE)
+
+tmpaes_geombar <- aes(x = group_3,
+                    y = emmean, 
+                    fill=group_3)
+
+# New facet label names for variable
+new_labels <- c("Speed","Accuracy","Efficiency")
+names(new_labels) <- c("rt_z", "acc_z","eff_z")
+
+# Define labels for func_plot_line_facet
+labeller_def <- labeller(.id = new_labels)
+
+facet_grid_def <- facet_grid(~ .id,
+                             switch = "y",
+                             labeller = labeller_def) 
+
+# Draw plot
+pd <- position_dodge(0.99)
+p.exe_ctrl_emmeans <- func_plot_bar_facet(emm_fac %>%
+                                        mutate(.id = fct_relevel(.id, "rt_z","acc_z", "eff_z"),
+                                          group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
+
+# Adjust legend size
+p.exe_ctrl_emmeans <- p.exe_ctrl_emmeans + theme(legend.key.size = unit(0.3, "cm"))
+
+# Save plot as pdf
+pdf("./Figures/Executive Control/p.exe_ctrl_emmeans.pdf",
+    width = 5/2.54,
+    height = 8/2.54,
+    useDingbats=FALSE) #in cm
+print(p.exe_ctrl_emmeans)
+dev.off()
+```
+#### Figure 3. Executive Control Tasks: Effects of Bed Rest on Speed, Accuracy, and Efficiency after Bed Rest. Data are means and SE.
+```{r, echo = FALSE, fig.width = 5, fig.height = 4, fig.cap = ""}
+print(p.exe_ctrl_emmeans)
+```
+# Cognition
+## Overall score
+```{r overall score cognition}
+df_cognition
+```
+
+## Plot Time Course adjusted for Baseline 
+```{r plot time course adjusted for baseline cognition}
+# Plot arithmetic means
+# Mean across tasks
+desc <- func_desc(df_cognition, group_3, time.f, variable)
+
+# Shift mean within groups to reflect a pre-HDT baseline performance of 0 (zero) (To reflect the analytical approach (adjusting for baseline performance).
+desc <- func_bdc_correction(desc)
+
+# Plot desc
+# New facet label names for variable
+new_labels <- c("Speed","Accuracy","Efficiency")
+names(new_labels) <- c("rt_z","acc_z", "eff_z")
+
+# Define aes for func_plot
+tmpaes_plot <- aes(x = time.f, y = MEAN,
+                   group = group_3,
+                   fill = group_3,
+                   color = group_3)
+
+tmpaes_errorbar <- aes(x = time.f,
+                    ymin = MEAN-SE, 
+                    ymax = MEAN+SE)
+
+# Define labels for func_plot_line_facet
+labeller_def <- labeller(variable = new_labels)
+
+facet_grid_def <- facet_grid(variable ~.,
+                             switch = "y",
+                             labeller = labeller_def) 
+
+# Draw plot
+pd <- position_dodge(0.5)
+p.cognition_desc <- func_plot_line_facet(desc %>%
+                                     mutate(time.f = fct_relevel(time.f, "BDC-9", "BDC-7", "BDC-6", "HDT1", "HDT3", "HDT5","HDT14", "HDT28", "HDT42", "HDT57", "R+1", "R+5", "R+12"),
+                                       variable = fct_relevel(variable, "rt_z","acc_z", "eff_z"),
+                                            group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
+
+# Add zero line
+p.cognition_desc <- p.cognition_desc + geom_hline(yintercept = 0, size = 0.3, linetype = "dotted")
+
+# Adjust legend size
+p.cognition_desc <- p.cognition_desc + theme(legend.key.size = unit(0.3, "cm"))
+```
+
+## Mixed Model Time x Group Interaction 
+```{r mixed model for time x group cognition}
+# Create baseline data
+# relabel time.f
+df_cognition$time.n <- plyr::revalue(df_cognition$time.f, c("BDC-9" = "01", "BDC-7" = "02", "BDC-6" = "03", "HDT1" = "04", "HDT3" = "05", "HDT5" = "06", "HDT14" = "07", "HDT28" = "08", "HDT42" = "09", "HDT57" = "10", "R+1" = "11", "R+5" = "12", "R+12" = "13"))
+df_cognition <- df_cognition[c(1:2,6, 3:5)]
+df_cognition$time.n <- as.character((df_cognition$time.n))
+df_cognition$time.n <- as.numeric((df_cognition$time.n))
+
+# Define BDC sessions (number indicates last bdc sessions based on time.n)
+bdc <- 3
+df_tmp <- func_bdc_cov_mult_all(df_cognition, id)
+
+# Select dep vars
+dvList <- c("rt_z","acc_z", "eff_z")
+
+# Define model
+model_mm <- paste0(" + sex"," + age", " + time.f",  " * group_3", " + (1|id)" )
+
+# Run mixed models
+tbl_mm_fac_aov <- sapply(func_mm_fac_with_bdc_adj_help(dvList), anova, simplify = FALSE, USE.NAMES = TRUE) 
+
+# ANOVA table 
+tbl_mm_fac_aov_df <- func_tbl_aov(dvList)
+
+# Helper functions for parameter definition in mixed model tables, takes 'dvList'
+Parameter_func <- function(dvList){
+  rep(c(
+  "Baseline",
+  "Sex",
+  "Age",
+  "Time",
+  "Group",
+  "Time x Group"),
+                 length(dvList))
+}
+
+# Add variables
+Parameter <- Parameter_func(dvList)
+blanks <- rep("", length(Parameter) / length(dvList) - 1)
+Variable <- c("Speed", blanks,"Accuracy", blanks, "Efficiency", blanks)
+tbl_mm_fac_aov_df_cognition <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
+```
+#### Table 10. Mixed Model Summary for Cognition Battery.
+```{r echo = FALSE}
+# Print table
+datatable(tbl_mm_fac_aov_df_cognition, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P"), digits = 3) %>%
+  formatRound(columns = c("df2", "F"), digits = 1)
+```
+
+## Contrasts for Comparing Groups at Each Time Point During Bed Rest
+```{r contrasts for groups by time cognition}
+# Contrasts
+# Define model for contrasts
+model_emmeans <- ~ time.f * group_3
+
+# Define contrasts
+contrast_type <- "pairwise"
+factors <- c("time.f")
+
+# Run contrasts
+tbl_contr_emm_fac_df <- func_tbl_contr_emm_fac_with_bdc_adj(dvList)
+
+# Create vars to make nice table
+tmp_n_dvs <- length(levels(tbl_contr_emm_fac_df$Contrast)) * 
+  length(levels(tbl_contr_emm_fac_df$time.f)) -1
+tmp_n_cond <- length(levels(tbl_contr_emm_fac_df$Contrast)) * 
+  length(levels(tbl_contr_emm_fac_df$time.f)) - 1
+tmp_n_time <- length(levels(tbl_contr_emm_fac_df$Contrast)) - 1
+
+
+tbl_contr_emm_fac_df$Variable <- c("Speed", rep("", tmp_n_dvs),
+                                   "Accuracy", rep("", tmp_n_dvs),
+                                   "Efficiency", rep("", tmp_n_dvs))
+
+tbl_contr_emm_fac_df$Time <- rep ( c("HDT1", rep("", tmp_n_time),
+                                     "HDT3", rep("", tmp_n_time),
+                                     "HDT5", rep("", tmp_n_time),
+                                     "HDT14", rep("", tmp_n_time),
+                                     "HDT28", rep("", tmp_n_time),
+                                     "HDT42", rep("", tmp_n_time),
+                                     "HDT57", rep("", tmp_n_time),
+                                     "R+1", rep("", tmp_n_time),
+                                     "R+5", rep("", tmp_n_time),
+                                     "R+12", rep("", tmp_n_time)),
+                                   length(dvList)/3 )
+
+#table_contrasts_emm_fac_by_time_df$Contrast <- rep(c("cAG vs. CTRL","iAG vs. CTRL", "cAG vs. iAG"), length(dvList))
+
+# Table for contrasts
+tbl_contr_emm_fac_df_cognition <- tbl_contr_emm_fac_df[c(8:9, 2, 7, 4:6)]
+```
+#### Table 11. Mixed Model Group Contrasts for Cognition Battery.
+```{r echo = FALSE}
+# Print table 
+datatable(tbl_contr_emm_fac_df_cognition, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
+  formatRound(columns = c("df", "t"), digits = 1)
+```
+
+## Plot Estimated Marignal Means To Show Time Course for Each Group
+```{r plot emmeans for groups by time cognition}
+# Define model for emmeans
+model_emmeans <- ~ time.f * group_3
+
+# Run emmeans
+emm_fac <- func_emm_fac_with_bdc_adj(dvList) 
+
+# Plot emmeans 
+# New facet label names for variable
+new_labels <- c("Speed","Accuracy","Efficiency")
+names(new_labels) <- c("rt_z","acc_z", "eff_z")
+
+# Define aes for func_plot
+tmpaes_plot <- aes(x = time.f, y = emmean,
+                   group = group_3,
+                   fill = group_3,
+                   color = group_3)
+
+tmpaes_errorbar <- aes(x = time.f,
+                    ymin = emmean-SE, 
+                    ymax = emmean+SE)
+
+# Define labels for func_plot_line_facet
+labeller_def <- labeller(.id = new_labels)
+
+facet_grid_def <- facet_grid(~.id ,
+                             switch = "y",
+                             labeller = labeller_def) 
+
+# Draw plot
+pd <- position_dodge(0.3)
+p.cognition_emmeans <- func_plot_line_facet(emm_fac %>%
+                                        mutate(time.f = fct_relevel(time.f, "HDT1", "HDT3", "HDT5","HDT14", "HDT28", "HDT42", "HDT57", "R+1", "R+5", "R+12"),
+                                               .id = fct_relevel(.id, "rt_z","acc_z", "eff_z"),
+                                               group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
+
+# Add zero line
+p.cognition_emmeans <- p.cognition_emmeans + geom_hline(yintercept = 0, size = 0.3, linetype = "dotted")
+
+# Adjust legend size
+p.cognition_emmeans <- p.cognition_emmeans + theme(legend.key.size = unit(0.3, "cm"))
+```
+## Mixed Model for Main Effect of Bed Rest (excluding BDC)
+```{r mixed model for main effect group cognition}
+# Drop recovery
+df_tmp <- subset(df_tmp, time.f != "R+12") # Drop baseline
+df_tmp <- droplevels(df_tmp)
+
+# Select dep vars
+dvList <- c("rt_z","acc_z", "eff_z")
+
+# Define model
+model_mm <- paste0(" + sex"," + age", " + group_3", " + (1|id)" )
+
+# Run mixed models
+tbl_mm_fac_aov <- sapply(func_mm_fac_with_bdc_adj_help(dvList), anova, simplify = FALSE, USE.NAMES = TRUE) 
+
+# ANOVA table
+tbl_mm_fac_aov_df <- func_tbl_aov(dvList)
+
+# Helper functions for parameter definition in mixed model tables, takes 'dvList'
+Parameter_func <- function(dvList){
+  rep(c(
+  "Baseline",
+  "Sex",
+  "Age",
+  "Group"),
+                 length(dvList))
+}
+
+# Add variables
+Parameter <- Parameter_func(dvList)
+blanks <- rep("", length(Parameter) / length(dvList) - 1)
+Variable <- c("Speed", blanks,"Accuracy", blanks, "Efficiency", blanks)
+tbl_mm_fac_aov_df_cognition_main <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
+```
+#### Table 12. Mixed Model Summary testing the Main Effect of Group for Cognition Battery.
+```{r echo = FALSE}
+# Print table
+datatable(tbl_mm_fac_aov_df_spacog_1_main, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P"), digits = 3) %>%
+  formatRound(columns = c("df2", "F"), digits = 1)
+```
+## Contrasts for Comparing Groups
+```{r contrasts for groups cognition}
+# Define model for emmeans
+model_emmeans <- ~ group_3
+
+# Run emmeans
+emm_fac <- func_emm_fac_with_bdc_adj(dvList)
+
+# Contrasts
+# Define model for contrasts
+model_emmeans <- ~ group_3
+
+# Define contrasts
+contrast_type <- "trt.vs.ctrl"
+factors <- c()
+
+# Run contrasts
+tbl_contr_emm_fac_df <- func_tbl_contr_emm_fac_with_bdc_adj(dvList)
+
+# Create vars to make nice table
+tbl_contr_emm_fac_df$Variable <- c("Speed", rep("", 1),
+                                   "Accuracy", rep("", 1),
+                                   "Efficiency", rep("", 1))
+#table_contrasts_emm_fac_by_time_df$Contrast <- rep(c("cAG vs. CTRL","iAG vs. CTRL", "cAG vs. iAG"), length(dvList))
+
+# Table for contrasts
+tbl_contr_emm_fac_cognition_main <- tbl_contr_emm_fac_df[c(7, 2, 6, 3:5)]
+```
+#### Table 5. Mixed Model Contrasts Comparing Groups for Cognition Battery.
+```{r echo = FALSE}
+# Print table
+datatable(tbl_contr_emm_fac_cognition_main, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
+  formatRound(columns = c("df", "t"), digits = 1)
+```
+## Plot Estimated Marignal Means for Comparing Groups
+```{r plot groups cognition}
+# New facet label names for variable
+new_labels <- c("Speed","Accuracy","Efficiency")
+names(new_labels) <- c("rt_z","acc_z", "eff_z")
+
+# Define aes for func_plot
+tmpaes_plot <- aes(x = contrast,
+                   y = emmean,
+                   group = group_3,
+                   fill = group_3,
+                   color = group_3)
+
+tmpaes_errorbar <- aes(x = group_3,
+                    ymin = emmean-SE, 
+                    ymax = emmean+SE)
+
+tmpaes_geombar <- aes(x = group_3,
+                    y = emmean, 
+                    fill=group_3)
+
+# Define labels for func_plot_line_facet
+labeller_def <- labeller(.id = new_labels)
+
+facet_grid_def <- facet_grid(.id ~.,
+                             switch = "y",
+                             scales = "free",
+                             labeller = labeller_def) 
+
+# Draw Plot 
+pd <- position_dodge(0.99)
+p.cognition_emmeans_main <- func_plot_bar_facet(emm_fac %>%
+                                            mutate(
+                                                   .id = fct_relevel(.id, "rt_z","acc_z", "eff_z"),
+                                                   group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG"))) 
+# Adjust legend size
+p.cognition_emmeans_main <- p.cognition_emmeans_main + theme(legend.key.size = unit(0.3, "cm"))
+```
+## Create Combined plot 
+```{r plot combined cognition}
+# Combine plot 
+p.cognition_comb_all <- plot_grid(p.cognition_desc, p.cognition_emmeans_main + rremove("x.text") + theme( strip.text.y = element_blank() ),
+                        labels = c("a", "b"),
+                        ncol = 2, nrow = 1,
+                        rel_widths = c(2.3, 0.7))
+
+# Adjust legend size
+p.cognition_comb_all <- p.cognition_comb_all + theme(legend.key.size = unit(0.3, "cm"))
+
+# Save plot as pdf
+pdf("./Figures/Cognition/p.cognition_comb_all.pdf",
+    width = 10/2.54, 
+    height = 12/2.54,
+    useDingbats = FALSE) #in cm
+print(p.cognition_comb_all)
+dev.off()
+```
+#### Figure 3.Cognition Battery 1: (a) Time course of speed, precision, and efficiency before, during, and after bed rest. (b) Main effect of bed rest. Data are means and SD adjusted for baseline.
+```{r, echo = FALSE, fig.width = 10, fig.height = 8, fig.cap = ""}
+print(p.cognition_comb_all)
+```
