@@ -12,6 +12,7 @@ library(openxlsx) #save tables
 library(plyr) #means across subjects and groups, change scores
 library(dplyr) #distinct function
 library(tidyverse)
+library(naniar)
 ```
 ## Print Session Info
 ```{r print R and package versions}
@@ -213,42 +214,142 @@ df_bio_tmp <- merge(df_bio_tmp, df_il6, by=c("id","time.f","tod"))
 df_blood <- merge(df_bio_tmp, df_tnfa, by=c("id","time.f","tod"))
 df_blood <- as_tibble(df_blood)
 ```
+# Relabel time.f
+```{r relabel}
+# Blood
+df_blood$time.f <- factor(df_blood$time.f , levels=c("BDC-6", "BDC-3", "HDT2", "HDT14", "HDT30", "HDT42", "HDT56", "R+1", "R+10"), ordered = TRUE)  
+
+df_blood$time.n <- plyr::revalue(df_blood$time.f, c("BDC-6" = "1", "BDC-3" = "2", "HDT2" = "3", "HDT14" = "4", "HDT30" = "5", "HDT42" = "6", "HDT56" = "7", "R+1" = "8", "R+10" = "9"))
+df_blood <- df_blood[c(1:2, 23, 3, 4, 7:8, 11, 14, 17, 20)]
+df_blood[c(1,2,4)] <- lapply(df_blood[c(1,2,4)], as.factor)
+df_blood[c(3, 5:11)] <- lapply(df_blood[c(3, 5:11)], as.numeric)
+
+# Cortisol
+df_cort$time.f <- factor(df_cort$time.f , levels=c("BDC-6", "BDC-3", "HDT2", "HDT14", "HDT30", "HDT42", "HDT56", "R+1", "R+10"), ordered = TRUE)  
+
+df_cort$time.n <- plyr::revalue(df_cort$time.f, c("BDC-6" = "1", "BDC-3" = "2", "HDT2" = "3", "HDT14" = "4", "HDT30" = "5", "HDT42" = "6", "HDT56" = "7", "R+1" = "8", "R+10" = "9"))
+df_cort <- df_cort[c(1:3,5,4)]
+df_cort$time.n <- as.character((df_cort$time.n))
+df_cort$time.n <- as.numeric((df_cort$time.n))
+```
+# Remove outliers
+```{r remove outliers}
+# Blood
+# Morning
+df_blood_morn <- subset(df_blood, tod == "1")
+
+dvList <- names(df_blood_morn[c(5:11)])
+outliers <- lapply(df_blood_morn[dvList], boxplot.stats) #show outliers
+
+df_blood_del_outlier <- df_blood_morn %>% 
+  replace_with_na(replace = list(bdnf = outliers$bdnf$out)) %>% 
+  replace_with_na(replace = list(igf = outliers$igf$out)) %>% 
+  replace_with_na(replace = list(vegf = outliers$vegf$out)) %>% 
+  replace_with_na(replace = list(il1b = outliers$il1b$out)) %>% 
+  replace_with_na(replace = list(il6 = outliers$il6$out)) %>% 
+  replace_with_na(replace = list(tnfa = outliers$tnfa$out)) %>% 
+  replace_with_na(replace = list(igf = outliers$igf$out)) %>% 
+  replace_with_na(replace = list(nfl = outliers$nfl$out))
+
+df_blood_morn <- df_blood_del_outlier
+
+# Post AG
+df_blood_postAG <- subset(df_blood, tod == "2")
+
+dvList <- names(df_blood_postAG[c(5:11)])
+outliers <- lapply(df_blood_postAG[dvList], boxplot.stats) #show outliers
+
+df_blood_del_outlier <- df_blood_postAG %>% 
+  replace_with_na(replace = list(bdnf = outliers$bdnf$out)) %>% 
+  replace_with_na(replace = list(igf = outliers$igf$out)) %>% 
+  replace_with_na(replace = list(vegf = outliers$vegf$out)) %>% 
+  replace_with_na(replace = list(il1b = outliers$il1b$out)) %>% 
+  replace_with_na(replace = list(il6 = outliers$il6$out)) %>% 
+  replace_with_na(replace = list(tnfa = outliers$tnfa$out)) %>% 
+  replace_with_na(replace = list(igf = outliers$igf$out)) %>% 
+  replace_with_na(replace = list(nfl = outliers$nfl$out))
+
+df_blood_postAG <- df_blood_del_outlier
+
+# Cortisol
+
+# Morning
+df_cort_morn <- subset(df_cort, tod == "1")
+dvList <- names(df_cort[c(5)])
+outliers <- lapply(df_cort_morn[dvList], boxplot.stats) #show outliers
+
+df_cort_del_outlier <- df_cort_morn %>% 
+  replace_with_na(replace = list(cort = outliers$cort$out)) 
+
+df_cort_morn <- df_cort_del_outlier
+
+# Evening
+df_cort_eve <- subset(df_cort, tod == "2")
+dvList <- names(df_cort[c(5)])
+outliers <- lapply(df_cort_morn[dvList], boxplot.stats) #show outliers
+
+df_cort_del_outlier <- df_cort_eve %>% 
+  replace_with_na(replace = list(cort = outliers$cort$out))
+
+df_cort_eve <- df_cort_del_outlier
+
+#df_cort_del_outlier <- reshape2::melt( df_cort_del_outlier, id.vars = c("id", "time.f", "time.n") )
+```
 # Add z scores
 ```{r z scores}
-# blood
-df_blood_z <- df_blood[c(1:4,7,8,11,14,17,20)]
+# Morning
+# Define id vars for long format, and bdc data
+id_vars <- c('id', 'time.f', 'time.n', 'tod')
+bdc <- quote( time.f == "BDC-6" | time.f == "BDC-3" )
 
-# Convert var type
-df_blood_z[c(1:3)] <- lapply(df_blood_z[c(1:3)], as.factor)
-df_blood_z[c(4:10)] <- lapply(df_blood_z[c(4:10)], as.numeric)
-df_blood_z <- as_tibble(df_blood_z)
+# Run z scores
+df_blood_z_morn <- func_z(df_blood_morn)
+df_blood_z_morn <- as_tibble(df_blood_z_morn)
+df_blood_z_morn <- droplevels(df_blood_z_morn)
+
+# Post AG
+# Add bdc to post AG data
+tmp <- df_blood_morn %>% filter(!!!bdc)
+df_blood_z_postAG <- rbind(tmp, df_blood_postAG)
 
 # Define id vars for long format, and bdc data
-id_vars <- c('id', 'time.f', 'tod')
+id_vars <- c('id', 'time.f', 'time.n', 'tod')
 bdc <- quote( time.f == "BDC-6" | time.f == "BDC-3" )
 
 # Run z scores
-df_blood_z <- func_z(df_blood_z)
-df_blood_z <- as_tibble(df_blood_z)
+df_blood_z_postAG <- func_z(df_blood_z_postAG)
+df_blood_z_postAG <- as_tibble(df_blood_z_postAG)
 
-# cortisol
-df_cort_z <- df_cort
+# Drop BDC
+df_blood_z_postAG <- subset(df_blood_z_postAG, time.f != "BDC-6" & time.f != "BDC-3")
+df_blood_z_postAG <- droplevels(df_blood_z_postAG)
+
+# Cortisol
+# Morning
+df_cort_z_morn <- subset(df_cort, tod == "1")
+df_cort_z_eve <- subset(df_cort, tod == "2")
 
 # define id vars for long format, and bdc data
-id_vars <- c('id', 'time.f', 'tod')
+id_vars <- c('id', 'time.f', 'time.n', 'tod')
 bdc <- quote( time.f == "BDC-6" | time.f == "BDC-3" )
 
 # Run z scores
-df_cort_z <- func_z(df_cort_z)
+df_cort_z_morn <- func_z(df_cort_z_morn)
+df_cort_z_morn <- as_tibble(df_cort_z_morn)
+df_cort_z_morn <- droplevels(df_cort_z_morn)
 
-df_cort_z <- as_tibble(df_cort_z)
+df_cort_z_eve <- func_z(df_cort_z_eve)
+df_cort_z_eve <- as_tibble(df_cort_z_eve)
+df_cort_z_eve <- droplevels(df_cort_z_eve)
 ```
 
 # Save data
 ```{r export data}
 list_of_datasets <- list("Data Cortisol" = df_cort,
-                         "Data Cortisol z" = df_cort_z,
+                         "Data Cortisol Morning z" = df_cort_z_morn,
+                         "Data Cortisol Evening z" = df_cort_z_eve,
                          "Data Blood" = df_blood,
-                         "Data Blood z" = df_blood_z)
+                         "Data Blood Morning z" = df_blood_z_morn,
+                         "Data Blood Post AG z" = df_blood_z_postAG)
 write.xlsx(list_of_datasets, file = "./Data/Data Biomarker.xlsx", overwrite = TRUE)
 ```

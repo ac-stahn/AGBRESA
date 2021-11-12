@@ -17,6 +17,7 @@ library(tidyverse)
 library(grDevices) # check outliers based on IQR
 library(openxlsx) # save tables
 library(readxl)
+library(naniar)
 ```
 ## Print Session Info
 ```{r print R and package versions}
@@ -91,6 +92,24 @@ colnames(df_cognition)[1] <- "id"
 df_cognition$id <- gsub("AGB_", "", df_cognition$id) #clean
 df_cognition[c(1:3)] <- lapply(df_cognition[c(1:3)], as.factor)
 df_cognition <- as_tibble(df_cognition)
+
+# Remove outliers 
+dvList <- names(df_cognition[c("MP_AvRT", "VOLT_AvRT", "NBCK_AvRT", "AM_AvRT", "LOT_AvRT", "ERT_AvRT", "MRT_AvRT", "DSST_AvRT", "BART_AvRT", "PVT_Slowness")])
+outliers <- lapply(df_cognition[dvList], boxplot.stats) #show outliers
+
+df_cognition_del_outlier <- df_cognition %>% 
+  replace_with_na(replace = list(MP_AvRT = outliers$MP_AvRT$out)) %>% 
+  replace_with_na(replace = list(VOLT_AvRT = outliers$VOLT_AvRT$out)) %>% 
+  replace_with_na(replace = list(NBCK_AvRT = outliers$NBCK_AvRT$out)) %>% 
+  replace_with_na(replace = list(AM_AvRT = outliers$AM_AvRT$out)) %>% 
+  replace_with_na(replace = list(LOT_AvRT = outliers$LOT_AvRT$out)) %>% 
+  replace_with_na(replace = list(ERT_AvRT = outliers$ERT_AvRT$out)) %>% 
+  replace_with_na(replace = list(MRT_AvRT = outliers$MRT_AvRT$out)) %>% 
+  replace_with_na(replace = list(DSST_AvRT = outliers$DSST_AvRT$out)) %>%
+  replace_with_na(replace = list(BART_AvRT = outliers$BART_AvRT$out)) %>%
+replace_with_na(replace = list(PVT_Slowness = outliers$PVT_Slowness$out))
+
+df_cognition <- df_cognition_del_outlier
 
 #names(df_cognition)[names(df_cognition) == "NBCK_Av_pCorr"] <- "NBCK_pCorr"
 #names(df_cognition)[names(df_cognition) == "PVT_Slowness"] <- "PVT_AvRT"

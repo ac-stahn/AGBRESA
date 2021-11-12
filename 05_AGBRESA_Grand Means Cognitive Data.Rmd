@@ -1,15 +1,34 @@
 ---
-title: "AGBRESA Extract Cognitive Data"
-author: "A Stahn"
-date: "11/08/2021"
-output: html_document
+title: "Appendix Final Report HyperCampus Grand Means Cognitive Performance"
+#author: "A Stahn"
+#date: "10/27/2021"
+#output:
+ # officedown::rdocx_document
+  #word_document:
+    #number_sections: TRUE
+    #fig_caption: TRUE
+  #bookdown::html_document2:
+  #number_sections: TRUE
+  #fig_caption: TRUE
+  #always_allow_html: true
+output:  
+  officedown::rdocx_document:
+    tables:
+      table.align: "center"
+      caption:
+        style: Table Caption
+        pre: 'Table '
+        sep: '. '
+        text.align: "left"
+    plots:
+      align: left
+      caption:
+        sep: '. '
 ---
 ```{r include = FALSE}
-knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, dpi = 300, echo = FALSE)
 ```
-
-# Prepare Script
-## Required Packages
+##Required Packages
 ```{r load required packages, message = FALSE}
 library(knitr) # for kable
 library(readxl) # read xls
@@ -29,51 +48,16 @@ library(ggplot2)
 library(ggsci)
 library(scales)
 library(cowplot) # for plot_grid, combine plots using cowplot
+library(officedown)
+library(officer)
+library(flextable)
 ```
 ## Print Session Info
 ```{r print R and package versions}
 print(sessionInfo())
 ```
-## Themes for Plots
-```{r create themes and correction factors}
-# Correct ggplot2 pts and fonts
-ggplot_factor_line <- ggplot2::.pt*72.27/96
-ggplot_factor_font = 1.0
 
-# Create project report theme
-theme_report_white  <-  theme_pubr() + theme(
-  axis.line = element_line(size = 0.5 / ggplot_factor_line,color="black"),
-  axis.ticks = element_line(size = 0.5 / ggplot_factor_line, color="black"),
-  axis.ticks.length = unit(0.2, "cm"), 
-  text = element_text(size = 8 * ggplot_factor_font,
-                      family="Helvetica",
-                      colour="black"),
-  axis.text.x=element_text(angle = 0, 
-                           vjust = 0.5,
-                           size = 8 * ggplot_factor_font,
-                           family = "Helvetica",
-                           colour = "black"), #face="bold"
-  axis.text.y = element_text(angle = 0,
-                            vjust=0.5,
-                            size= 8 * ggplot_factor_font,
-                            family = "Helvetica",
-                            colour="black"),
-  axis.title.x = element_text(angle = 0,
-                            vjust =0.5,
-                            size= 8 * ggplot_factor_font,
-                            family="Helvetica",
-                            colour="black",
-                            face="bold"),
-  axis.title.y = element_text(angle = 90,
-                            vjust = 0.5,
-                            size= 8 * ggplot_factor_font,
-                            family = "Helvetica",
-                            colour = "black",
-                            face = "bold") # face = "bold" 
-  )
-```
-# Definition of Helper Functions 
-## Descriptive Functions
+##Descriptive Functions
 ```{r functions for descriptive stats}
 # Function to compute descriptives
 func_desc <- function(data, ...) {
@@ -95,94 +79,43 @@ func_desc <- function(data, ...) {
   return(result)
 }
 
-func_bdc_correction <- function(data, ...) {
+func_bdc_correction_cognition <- function(data, ...) {
 
   df_tmp <- data %>%
     subset(time.f == "BDC-6" | time.f == "BDC-7" |time.f == "BDC-9") %>%
-    group_by(group_3) %>%
+    group_by(group_3, variable) %>%
     dplyr::summarise(
       mean_bdc_by_group = mean(MEAN, na.rm = T)
       )
   
-  df_tmp <- merge(df_tmp, data, by = "group_3")
+  df_tmp <- merge(df_tmp, data, by = c("group_3","variable") )
   df_tmp %>%
     mutate(MEAN_corr = case_when(time.f == "BDC-6" | time.f == "BDC-7" | time.f == "BDC-9" ~
                               MEAN-mean_bdc_by_group,
                             TRUE ~ MEAN)) %>%
     select( c(!mean_bdc_by_group & !MEAN) ) %>%
-    rename(MEAN = MEAN_corr)
+    dplyr::rename(MEAN = MEAN_corr)
 }
-```
-## Plot Functions
-```{r functions for plots}
-# Wrapper function for line plots, forwards to func_plot_line_facet
-func_plot_line <- function(x) {ggplot(x, tmpaes_plot) + 
-    theme_report_white +
-    geom_line(position = pd) +
-    geom_errorbar(tmpaes_errorbar,
-                  width =.4, 
-                  position = pd) +
-    geom_point(position = pd,
-               shape = 21,
-               size = 2) + #shape = 21, size = 1, fill = "white"
-    scale_y_continuous(expand = c(0,0)) +
-    labs(y = "", x = "Time", size = 10) +
-    theme(legend.title = element_blank(),
-          legend.text = element_text(size = 8),
-          axis.title.x = element_text(size = 10))
+
+func_bdc_correction <- function(data,..){
+ df_tmp <- data %>%
+    subset(time.f == bdc) %>%
+    group_by(group_3, variable) %>%
+    dplyr::summarise(
+      mean_bdc_by_group = mean(MEAN, na.rm = T)
+      )
+  
+  df_tmp <- merge(df_tmp, data, by = c("group_3", "variable") )
+  df_tmp <- df_tmp %>%
+    mutate(MEAN_corr = case_when(time.f == bdc ~
+                              MEAN-mean_bdc_by_group,
+                            TRUE ~ MEAN)) %>%
+    select( c(!mean_bdc_by_group & !MEAN) ) %>%
+    dplyr::rename(MEAN = MEAN_corr)
   }
-
-# Function for line plots, takes 'desc' as input
-func_plot_line_facet <- function(x) {func_plot_line(x) +
-    facet_grid_def +
-    theme(strip.placement = "outside",
-          strip.background = element_rect(color = "transparent",
-                                          fill = "transparent", size = 1.5,
-                                          linetype = "solid"),
-          strip.text = element_text(size = 10,
-                                    color = "black",
-                                    face = "bold"),
-          panel.spacing.y = unit(2, "lines"))
-}
-
-# Function for bar plots, forwards to func_plot_bar_facet
-func_plot_bar <- function(x) {ggplot(x, tmpaes_plot) + theme_report_white +
-    geom_hline(yintercept = 0,
-               size = 0.3,
-               linetype = "solid") +
-    geom_errorbar(tmpaes_errorbar,
-                 width = .4,
-                  position = pd,
-                  color = "black") +
-    geom_bar(tmpaes_geombar, # separate by category
-             stat = "identity", 
-             position = pd,
-             width = 1.0,
-             color = "black") + # make it side-by-side
-    scale_y_continuous(expand = c(0,0)) +
-    labs(y = "", x = "", size = 10) +
-    guides(x = "none") +
-    theme(legend.title = element_blank(),
-          legend.text = element_text(size=8),
-          axis.title.x = element_text(size = 10),
-          axis.text.x = element_blank(),
-          axis.ticks.x = element_blank())
-}
-
-# Function for bar plots, takes 'desc*' as input
-func_plot_bar_facet <- function(x) {func_plot_bar(x) +
-    facet_grid_def +
-    theme(strip.placement = "outside",
-          strip.background = element_rect(color = "transparent",
-                                          fill = "transparent", size = 1.5,
-                                          linetype = "solid"),
-          strip.text = element_text(size = 10,
-                                    color = "black",
-                                    face = "bold"),
-          panel.spacing.y = unit(2, "lines"))
-}
 ```
-## Functions for Mixed Models
+
+##Functions for Mixed Models
 ```{r functions for mixed models}
 # Wrapper for appending bdc data as covariate
 func_bdc_cov <- function(data, ...) {
@@ -433,7 +366,119 @@ func_tbl_contr_emm_fac_nlme <- function(dvList) {
   return(tmp)
 }
 ```
-## Load Data
+#Functions tables
+```{r functions for flextable}
+theme_tableflex_report <- function(x, ...) {
+  std_b <- fp_border(width = 1.5, color = "black")
+  thin_b <- fp_border(width = 0.5, color = "black")
+    x <- border_remove(x)
+    x <- hline(x, border = thin_b, part = "all")
+    x <- hline_top(x, border = std_b, part = "header")
+    x <- hline_bottom(x, border = std_b, part = "header")
+    x <- hline_bottom(x, border = std_b, part = "body")
+    x <- bold(x = x, bold = TRUE, part = "header")
+    x <- align_text_col(x, align = "left", header = TRUE)
+    x <- align_nottext_col(x, align = "center", header = TRUE)
+    fix_border_issues(x)
+    autofit(x)
+}
+
+set_flextable_defaults(
+  font.size = 10,
+  font.family = "Times New Roman",
+  theme_fun = theme_tableflex_report)
+  #padding = 6)
+  #background.color = "#EFEFEF")
+```
+#Themes for Plots
+```{r create themes and correction factors}
+# Correct ggplot2 pts and fonts
+ggplot_factor_line <- ggplot2::.pt*72.27/96
+ggplot_factor_font = 1.0
+
+# Create project report theme
+theme_report <- function(base_size = 8) {
+  theme_pubr() + #%+replace%
+    theme(
+      plot.margin = margin(0, 0, 0, 0, "cm"),
+      text = element_text(size = 8,
+                      colour="black"), #family="Helvetica"
+      # axes
+      axis.title = element_text(size = 8, face = "bold"), #vjust = 0.5
+      axis.text = element_text(size = 8), #angle = 0
+      axis.line = element_line(size = 0.5 / ggplot_factor_line, color="black"),
+      axis.ticks = element_line(size = 0.5 / ggplot_factor_line, color="black"),
+      axis.ticks.length = unit(0.2, "cm"), 
+      # legend
+      legend.key = element_rect(fill = "transparent", colour = NA),
+      legend.key.size = unit(1.5, "lines"),
+      legend.background = element_rect(fill = "transparent", colour = NA),
+      legend.title = element_blank(),
+      legend.text = element_text(size = 8),
+      axis.title.x = element_text(size = 8),
+      # facetting
+      strip.placement = "outside",
+          strip.background = element_rect(color = "transparent",
+                                          fill = "transparent", size = 1.5),
+                                          #linetype = "solid"),
+          strip.text = element_text(size = 8,
+                                    color = "black",
+                                    face = "bold"),
+          panel.spacing.y = unit(1.5, "lines")
+    )
+}
+
+```
+#Functions Plotting
+```{r functions for plots}
+# Wrapper function for line plots, forwards to func_plot_line_facet
+func_plot_line <- function(x) {ggplot(x, tmpaes_plot) + 
+    theme_report() +
+    geom_line(position = pd,
+              size = 0.3) +
+    geom_errorbar(tmpaes_errorbar,
+                  width =.4,
+                  size = 0.3,
+                  position = pd) +
+    geom_point(position = pd,
+               #shape = 21,
+               size = 2) +
+    scale_y_continuous(expand = c(0,0)) +
+    labs(y = "", x = "Time", size = 10)
+    #scale_shape_manual(values=c(3, 16, 17))+
+  }
+
+# Function for line plots, takes 'desc' as input
+func_plot_line_facet <- function(x) {func_plot_line(x) +
+    facet_grid_def
+}
+
+
+# Function for bar plots, forwards to func_plot_bar_facet
+func_plot_bar <- function(x) {ggplot(x, tmpaes_plot) + theme_report() +
+    geom_hline(yintercept = 0,
+               size = 0.3,
+               linetype = "solid") +
+    geom_errorbar(tmpaes_errorbar,
+                 width = .4,
+                  position = pd,
+                  color = "black") +
+    geom_bar(tmpaes_geombar, # separate by category
+             stat = "identity", 
+             position = pd,
+             width = 1.0,
+             color = "black") + # make it side-by-side
+    scale_y_continuous(expand = c(0,0)) +
+    labs(y = "", x = "", size = 10) +
+    guides(x = "none")
+}
+
+# Function for bar plots, takes 'desc*' as input
+func_plot_bar_facet <- function(x) {func_plot_bar(x) +
+    facet_grid_def
+}
+```
+##Load Data
 ```{r load data}
 #  Demographics
 df_demo <- read_excel("./Data/Data Demographics.xlsx", sheet = "Data Demo")
@@ -515,13 +560,13 @@ df_cognition[c(1:2)] <- lapply(df_cognition[c(1:2)], as.factor)
 
 ```
 # Spatial Cognition Battery 1
-## Overall score
+##Overall score
 ```{r overall score spacog_1}
 # Define primary outcomes
-df_pto_v1 <- df_pto[-c(3)] 
-df_pto_v2 <- df_pto[-c(5)] 
-colnames(df_pto_v2)[3] <- "acc_z"
-df_pto_v2$eff_z <- (df_pto_v2$rt_z + df_pto_v2$acc_z) / 2
+df_pto_v1 <- df_pto[-c(3,4)] 
+#df_pto_v2 <- df_pto[-c(5)] 
+#colnames(df_pto_v2)[3] <- "acc_z"
+df_pto_v1$eff_z <- (df_pto_v1$rt_z + df_pto_v1$acc_z) / 2
   
 df_navis_2d_v1 <- df_navis_2d[-c(5,7)] 
 colnames(df_navis_2d_v1)[4] <- "acc_z"
@@ -534,10 +579,14 @@ colnames(df_navis_2d_v2)[5] <- "eff_z"
 # Combine tasks in one variable
 df_spacog_1 <- rbind(df_4mtn, df_sut, df_pto_v1, df_navis_2d_v2)
 ```
-## Plot Time Course adjusted for Baseline 
+##Plot Time Course adjusted for Baseline 
 ```{r plot time course adjusted for baseline spacog_1}
 # Mean across tasks
 desc <- func_desc(df_spacog_1, group_3, time.f, variable)
+
+# Shift mean within groups to reflect a pre-HDT baseline performance of 0 (zero) (To reflect the analytical approach (adjusting for baseline performance).
+bdc <- c("BDC-3")
+desc <- func_bdc_correction(desc)
 
 # Plot desc
 # New facet label names for variable
@@ -573,10 +622,9 @@ p.spacog_1_desc <- p.spacog_1_desc + geom_hline(yintercept = 0, size = 0.3, line
 
 # Adjust legend size
 p.spacog_1_desc <- p.spacog_1_desc + theme(legend.key.size = unit(0.3, "cm"))
-
 ```
 
-## Mixed Model Time x Group Interaction 
+##Mixed Model Time x Group Interaction 
 ```{r mixed model for time x group spacog_1}
 # Mean across tasks
 df_tmp <- func_desc(df_spacog_1, id, group_3, time.f, variable)
@@ -617,18 +665,15 @@ blanks <- rep("", length(Parameter) / length(dvList) - 1)
 Variable <- c("Speed", blanks,"Accuracy", blanks, "Efficiency", blanks)
 tbl_mm_fac_aov_df_spacog_1 <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
 ```
-#### Table 2. Mixed Model Summary for Spatial Cognition Battery 1.
-```{r echo = FALSE}
-# Print table
-datatable(tbl_mm_fac_aov_df_spacog_1, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns = c("P"), digits = 3) %>%
-  formatRound(columns = c("df2", "F"), digits = 1)
+```{r tab.cap = "Mixed Model Summary for Spatial Cognition Battery 1.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_mm_fac_aov_df_spacog_1 <- tbl_mm_fac_aov_df_spacog_1 %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df2", "F"), digits = 1) %>% 
+  colformat_double( j = c("P"), digits = 3 ) 
+# Print
+tbl_mm_fac_aov_df_spacog_1
 ```
-
-## Contrasts for Comparing Groups at Each Time Point During Bed Rest
+##Contrasts for Comparing Groups at Each Time Point During Bed Rest
 ```{r contrasts for groups by time spacog_1}
 # Contrasts
 # Define model for contrasts
@@ -664,18 +709,15 @@ tbl_contr_emm_fac_df$Time <- rep ( c("HDT2", rep("", tmp_n_time),
 # Ttble for contrasts
 tbl_contr_emm_fac_df_spacog_1 <- tbl_contr_emm_fac_df[c(8:9, 2, 7, 4:6)]
 ```
-#### Table 3. Mixed Model Group Contrasts for Spatial Cognition Battery 1.
-```{r echo = FALSE}
-# Print table 
-datatable(tbl_contr_emm_fac_df_spacog_1, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
-  formatRound(columns = c("df", "t"), digits = 1)
+```{r tab.cap = "Mixed Model Group Contrasts for Spatial Cognition Battery 1.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_contr_emm_fac_df_spacog_1 <- tbl_contr_emm_fac_df_spacog_1 %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df", "t"), digits = 1) %>% 
+  colformat_double( j = c("P (unadjusted)"), digits = 3 ) 
+# Print
+tbl_contr_emm_fac_df_spacog_1
 ```
-
-## Plot Estimated Marignal Means To Show Time Course for Each Group
+##Plot Estimated Marignal Means To Show Time Course for Each Group
 ```{r plot emmeans for groups by time spacog_1}
 # Define model for emmeans
 model_emmeans <- ~ time.f * group_3
@@ -718,7 +760,7 @@ p.spacog_1_emmeans <- p.spacog_1_emmeans + geom_hline(yintercept = 0, size = 0.3
 # Adjust legend size
 p.spacog_1_emmeans <- p.spacog_1_emmeans + theme(legend.key.size = unit(0.3, "cm"))
 ```
-## Mixed Model for Main Effect of Bed Rest (excluding BDC)
+##Mixed Model for Main Effect of Bed Rest (excluding BDC)
 ```{r mixed model for main effect group spacog_1}
 # Drop recovery
 df_tmp <- subset(df_tmp, time.f != "R+12") # Drop baseline
@@ -752,17 +794,15 @@ blanks <- rep("", length(Parameter) / length(dvList) - 1)
 Variable <- c("Speed", blanks,"Accuracy", blanks, "Efficiency", blanks)
 tbl_mm_fac_aov_df_spacog_1_main <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
 ```
-#### Table 4. Mixed Model Summary testing the Main Effect of Group for Spatial Cognition Battery 1.
-```{r echo = FALSE}
-# Print table
-datatable(tbl_mm_fac_aov_df_spacog_1_main, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns = c("P"), digits = 3) %>%
-  formatRound(columns = c("df2", "F"), digits = 1)
+```{r tab.cap = "Mixed Model Summary testing the Main Effect of Group for Spatial Cognition Battery 1.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_mm_fac_aov_df_spacog_1_main <- tbl_mm_fac_aov_df_spacog_1_main %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df2", "F"), digits = 1) %>% 
+  colformat_double( j = c("P"), digits = 3 ) 
+# Print
+tbl_mm_fac_aov_df_spacog_1_main
 ```
-## Contrasts for Comparing Groups
+##Contrasts for Comparing Groups
 ```{r contrasts for groups spacog_1}
 # Define model for emmeans
 model_emmeans <- ~ group_3
@@ -790,17 +830,15 @@ tbl_contr_emm_fac_df$Variable <- c("Speed", rep("", 1),
 # Table for contrasts
 tbl_contr_emm_fac_spacog_1_main <- tbl_contr_emm_fac_df[c(7, 2, 6, 3:5)]
 ```
-#### Table 5. Mixed Model Contrasts Comparing Groups for Spatial Cognition Battery 1.
-```{r echo = FALSE}
-# Print table
-datatable(tbl_contr_emm_fac_spacog_1_main, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
-  formatRound(columns = c("df", "t"), digits = 1)
+```{r tab.cap = "Mixed Model Contrasts Comparing Groups for Spatial Cognition Battery 1.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_contr_emm_fac_spacog_1_main <- tbl_contr_emm_fac_spacog_1_main %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df", "t"), digits = 1) %>% 
+  colformat_double( j = c("P (unadjusted)"), digits = 3 ) 
+# Print
+tbl_contr_emm_fac_spacog_1_main
 ```
-## Plot Estimated Marignal Means for Comparing Groups
+##Plot Estimated Marignal Means for Comparing Groups
 ```{r plot groups spacog_1}
 # New facet label names for variable
 new_labels <- c("Speed","Accuracy","Efficiency")
@@ -838,13 +876,13 @@ p.spacog_1_emmeans_main <- func_plot_bar_facet(emm_fac %>%
 # Adjust legend size
 p.spacog_1_emmeans_main <- p.spacog_1_emmeans_main + theme(legend.key.size = unit(0.3, "cm"))
 ```
-## Create Combined plot 
+##Create Combined plot 
 ```{r plot combined spacog_1}
 # Combine plot 
 p.spacog_1_comb <- plot_grid(p.spacog_1_desc, p.spacog_1_emmeans_main + rremove("x.text") + theme( strip.text.y = element_blank() ),
                         labels = c("a", "b"),
                         ncol = 2, nrow = 1,
-                        rel_widths = c(1.9, 1.1))
+                        rel_widths = c(2.1, 0.9))
 
 # Adjust legend size
 p.spacog_1_comb <- p.spacog_1_comb + theme(legend.key.size = unit(0.3, "cm"))
@@ -857,13 +895,11 @@ pdf("./Figures/Spatial Cognition 1/p.spacog_1_comb.pdf",
 print(p.spacog_1_comb)
 dev.off()
 ```
-#### Figure 1. Spatial Cognition Battery 1: (a) Time course of speed, precision, and efficiency before, during, and after bed rest. (b) Main effect of bed rest. Data are means and SD adjusted for baseline.
-```{r, echo = FALSE, fig.width = 6, fig.height = 8, fig.cap = ""}
-print(p.spacog_1_comb)
+```{r fig.id = "tsplot", fig.cap.style = "Image Caption", fig.width = 5, fig.height = 6.5, echo = FALSE, fig.cap = "Spatial Cognition Battery 1: (a) Time course of speed, precision, and efficiency before, during, and after bed rest. (b) Main effect of bed rest. Data are means and SD adjusted for baseline."}
+p.spacog_1_comb
 ```
-
 # Spatial Cognition Battery 2
-## Overall score
+##Overall score
 ```{r overall score spacog_2}
 # Define primary outcomes
 df_wm_v1 <- df_wm[-c(4)] 
@@ -871,10 +907,6 @@ colnames(df_wm_v1)[4] <- "acc_z"
 df_wm_v2 <- df_wm[-c(4)] 
 colnames(df_wm_v2)[4] <- "acc_z"
 df_wm_v2$eff_z <- (df_wm_v2$rt_z + df_wm_v2$acc_z) / 2
-
-df_navstrat_same 
-df_navstrat_diff
-df_navstrat
 
 df_navis_vr_v1 <- df_navis_vr[-c(5,7)] 
 colnames(df_navis_vr_v1)[4] <- "acc_z"
@@ -887,7 +919,7 @@ colnames(df_navis_vr_v2)[5] <- "eff_z"
 # Combine tasks in one variable
 df_spacog_2 <- rbind(df_sot, df_cogmap, df_wm_v1, df_navstrat, df_navis_vr_v1)
 ```
-#### Mixed Model Comparing Groups
+##Mixed Model Comparing Groups
 ```{r echo = FALSE}
 # Drop BDC
 df_tmp <- subset(df_spacog_2, time.f != "BDC-6" &  time.f != "R+12")
@@ -932,19 +964,15 @@ Variable <- c("Speed", blanks,"Accuracy", blanks, "Efficiency", blanks)
 tbl_mm_fac_aov_df_spacog_2 <- cbind(Variable, Parameter, tbl_mm_fac_aov_df)
 tbl_mm_fac_aov_df_spacog_2 <- tbl_mm_fac_aov_df_spacog_2[-c(3)]
 ```
-
-#### Table 6. Mixed Model Summary for Spatial Cognition Battery 2.
-```{r echo = FALSE}
-# Print table
-datatable(tbl_mm_fac_aov_df_spacog_2, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns = c("P"), digits = 3) %>%
-  formatRound(columns = c("df2", "F"), digits = 1)
+```{r tab.cap = "Mixed Model Summary for Spatial Cognition Battery 2.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_mm_fac_aov_df_spacog_2 <- tbl_mm_fac_aov_df_spacog_2 %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df2", "F"), digits = 1) %>% 
+  colformat_double( j = c("P"), digits = 3 ) 
+# Print
+tbl_mm_fac_aov_df_spacog_2
 ```
-
-## Contrasts for Group Comparisons
+##Contrasts for Group Comparisons
 ```{r contrasts between groups spacog_2}
 # Contrasts
 # Define model for contrasts
@@ -967,17 +995,15 @@ tbl_contr_emm_fac_df$Variable <- c("Speed", rep("", 2),
 # Table for contrasts
 tbl_contr_emm_fac_df_spaccog_2 <- tbl_contr_emm_fac_df[c(7,2,6,3:5)]
 ```
-#### Table 7. Mixed Model Group Contrasts for Spatial Cognition Battery 2.
-```{r echo = FALSE}
-# print table
-datatable(tbl_contr_emm_fac_df_spaccog_2, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns=c("P (unadjusted)"), digits = 3) %>%
-  formatRound(columns=c("df", "t"), digits = 1)
+```{r tab.cap = "Mixed Model Group Contrasts for Spatial Cognition Battery 2.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_contr_emm_fac_df_spaccog_2 <- tbl_contr_emm_fac_df_spaccog_2 %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df", "t"), digits = 1) %>% 
+  colformat_double( j = c("P (unadjusted)"), digits = 3 ) 
+# Print
+tbl_contr_emm_fac_df_spaccog_2
 ```
-## Plot Estimated Marignal Means for Group Comparisons
+##Plot Estimated Marignal Means for Group Comparisons
 ```{r plot emmeans by groups spacog_2}
 # Define model for emmeans
 model_emmeans <- ~ group_3
@@ -1028,18 +1054,16 @@ pdf("./Figures/Executive Control/p.spacog_2_emmeans.pdf",
 print(p.spacog_2_emmeans)
 dev.off()
 ```
-#### Figure 2. Spatial Cognition Battery 2: Effects of Bed Rest on Speed, Accuracy, and Efficiency after Bed Rest. Data are means and SE.
-```{r, echo = FALSE, fig.width = 5, fig.height = 4, fig.cap = ""}
-print(p.spacog_2_emmeans)
+```{r fig.id = "tsplot", fig.cap.style = "Image Caption", fig.width = 3, fig.height = 2.5, echo = FALSE, fig.cap = "Spatial Cognition Battery 2: Effects of Bed Rest on Speed, Accuracy, and Efficiency after Bed Rest. Data are means and SE."}
+p.spacog_2_emmeans
 ```
 # Executive Control
-## Overall score
+##Overall score
 ```{r overall score exe_ctrl}
 # Combine tasks in one variable
 df_exe_ctrl <- rbind(df_switch, df_dual)
 ```
-
-## Comparing Groups
+##Comparing Groups
 ```{r echo = FALSE}
 # Drop BDC
 df_tmp <- subset(df_exe_ctrl, time.f != "BDC-6")
@@ -1084,19 +1108,15 @@ Variable <- c("Speed", blanks,"Accuracy", blanks, "Efficiency", blanks)
 tbl_mm_fac_aov_df_exe_ctrl <- cbind(Variable, Parameter, tbl_mm_fac_aov_df)
 tbl_mm_fac_aov_df_exe_ctrl <- tbl_mm_fac_aov_df_exe_ctrl[-c(3)]
 ```
-
-#### Table 8. Mixed Model Summary for Executive Control Tasks.
-```{r echo = FALSE}
-# Print table
-datatable(tbl_mm_fac_aov_df_exe_ctrl, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns = c("P"), digits = 3) %>%
-  formatRound(columns = c("df2", "F"), digits = 1)
+```{r tab.cap = "Mixed Model Summary for Executive Control Tasks.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_mm_fac_aov_df_exe_ctrl <- tbl_mm_fac_aov_df_exe_ctrl %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df2", "F"), digits = 1) %>% 
+  colformat_double( j = c("P"), digits = 3 ) 
+# Print
+tbl_mm_fac_aov_df_exe_ctrl
 ```
-
-## Contrasts for Group Comparisons
+##Contrasts for Group Comparisons
 ```{r contrasts between groups exe_ctrl}
 # Contrasts
 # Define model for contrasts
@@ -1119,17 +1139,15 @@ tbl_contr_emm_fac_df$Variable <- c("Speed", rep("", 2),
 # Table for contrasts
 tbl_contr_emm_fac_df_exe_ctrl <- tbl_contr_emm_fac_df[c(7,2,6,3:5)]
 ```
-#### Table 9. Mixed Model Group Contrasts for Executive Control Tasks.
-```{r echo = FALSE}
-# print table
-datatable(tbl_contr_emm_fac_df_exe_ctrl, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns=c("P (unadjusted)"), digits = 3) %>%
-  formatRound(columns=c("df", "t"), digits = 1)
+```{r tab.cap = "Mixed Model Group Contrasts for Executive Control Tasks.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_contr_emm_fac_df_exe_ctrl <- tbl_contr_emm_fac_df_exe_ctrl %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df", "t"), digits = 1) %>% 
+  colformat_double( j = c("P (unadjusted)"), digits = 3 ) 
+# Print
+tbl_contr_emm_fac_df_exe_ctrl
 ```
-## Plot Estimated Marignal Means for Group Comparisons
+##Plot Estimated Marignal Means for Group Comparisons
 ```{r plot emmeans by groups exe_ctrl}
 # Define model for emmeans
 model_emmeans <- ~ group_3
@@ -1180,24 +1198,22 @@ pdf("./Figures/Executive Control/p.exe_ctrl_emmeans.pdf",
 print(p.exe_ctrl_emmeans)
 dev.off()
 ```
-#### Figure 3. Executive Control Tasks: Effects of Bed Rest on Speed, Accuracy, and Efficiency after Bed Rest. Data are means and SE.
-```{r, echo = FALSE, fig.width = 5, fig.height = 4, fig.cap = ""}
-print(p.exe_ctrl_emmeans)
+```{r fig.id = "tsplot", fig.cap.style = "Image Caption", fig.width = 3, fig.height = 2.5, echo = FALSE, fig.cap = " Executive Control Tasks: Effects of Bed Rest on Speed, Accuracy, and Efficiency after Bed Rest. Data are means and SE."}
+p.exe_ctrl_emmeans
 ```
 # Cognition
-## Overall score
+##Overall score
 ```{r overall score cognition}
-df_cognition
+#df_cognition
 ```
-
-## Plot Time Course adjusted for Baseline 
+##Plot Time Course adjusted for Baseline 
 ```{r plot time course adjusted for baseline cognition}
 # Plot arithmetic means
 # Mean across tasks
 desc <- func_desc(df_cognition, group_3, time.f, variable)
 
 # Shift mean within groups to reflect a pre-HDT baseline performance of 0 (zero) (To reflect the analytical approach (adjusting for baseline performance).
-desc <- func_bdc_correction(desc)
+desc <- func_bdc_correction_cognition(desc)
 
 # Plot desc
 # New facet label names for variable
@@ -1234,8 +1250,7 @@ p.cognition_desc <- p.cognition_desc + geom_hline(yintercept = 0, size = 0.3, li
 # Adjust legend size
 p.cognition_desc <- p.cognition_desc + theme(legend.key.size = unit(0.3, "cm"))
 ```
-
-## Mixed Model Time x Group Interaction 
+##Mixed Model Time x Group Interaction 
 ```{r mixed model for time x group cognition}
 # Create baseline data
 # relabel time.f
@@ -1278,18 +1293,15 @@ blanks <- rep("", length(Parameter) / length(dvList) - 1)
 Variable <- c("Speed", blanks,"Accuracy", blanks, "Efficiency", blanks)
 tbl_mm_fac_aov_df_cognition <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
 ```
-#### Table 10. Mixed Model Summary for Cognition Battery.
-```{r echo = FALSE}
-# Print table
-datatable(tbl_mm_fac_aov_df_cognition, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns = c("P"), digits = 3) %>%
-  formatRound(columns = c("df2", "F"), digits = 1)
+```{r tab.cap = "Mixed Model Summary for Cognition Battery.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_mm_fac_aov_df_cognition <- tbl_mm_fac_aov_df_cognition %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df2", "F"), digits = 1) %>% 
+  colformat_double( j = c("P"), digits = 3 ) 
+# Print
+tbl_mm_fac_aov_df_cognition
 ```
-
-## Contrasts for Comparing Groups at Each Time Point During Bed Rest
+##Contrasts for Comparing Groups at Each Time Point During Bed Rest
 ```{r contrasts for groups by time cognition}
 # Contrasts
 # Define model for contrasts
@@ -1331,18 +1343,15 @@ tbl_contr_emm_fac_df$Time <- rep ( c("HDT1", rep("", tmp_n_time),
 # Table for contrasts
 tbl_contr_emm_fac_df_cognition <- tbl_contr_emm_fac_df[c(8:9, 2, 7, 4:6)]
 ```
-#### Table 11. Mixed Model Group Contrasts for Cognition Battery.
-```{r echo = FALSE}
-# Print table 
-datatable(tbl_contr_emm_fac_df_cognition, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
-  formatRound(columns = c("df", "t"), digits = 1)
+```{r tab.cap = "Mixed Model Group Contrasts for Cognition Battery.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_contr_emm_fac_df_cognition <- tbl_contr_emm_fac_df_cognition %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df", "t"), digits = 1) %>% 
+  colformat_double( j = c("P (unadjusted)"), digits = 3 ) 
+# Print
+tbl_contr_emm_fac_df_cognition
 ```
-
-## Plot Estimated Marignal Means To Show Time Course for Each Group
+##Plot Estimated Marignal Means To Show Time Course for Each Group
 ```{r plot emmeans for groups by time cognition}
 # Define model for emmeans
 model_emmeans <- ~ time.f * group_3
@@ -1385,7 +1394,7 @@ p.cognition_emmeans <- p.cognition_emmeans + geom_hline(yintercept = 0, size = 0
 # Adjust legend size
 p.cognition_emmeans <- p.cognition_emmeans + theme(legend.key.size = unit(0.3, "cm"))
 ```
-## Mixed Model for Main Effect of Bed Rest (excluding BDC)
+##Mixed Model for Main Effect of Bed Rest (excluding BDC)
 ```{r mixed model for main effect group cognition}
 # Drop recovery
 df_tmp <- subset(df_tmp, time.f != "R+12") # Drop baseline
@@ -1419,17 +1428,15 @@ blanks <- rep("", length(Parameter) / length(dvList) - 1)
 Variable <- c("Speed", blanks,"Accuracy", blanks, "Efficiency", blanks)
 tbl_mm_fac_aov_df_cognition_main <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
 ```
-#### Table 12. Mixed Model Summary testing the Main Effect of Group for Cognition Battery.
-```{r echo = FALSE}
-# Print table
-datatable(tbl_mm_fac_aov_df_spacog_1_main, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns = c("P"), digits = 3) %>%
-  formatRound(columns = c("df2", "F"), digits = 1)
+```{r tab.cap = "Mixed Model Summary testing the Main Effect of Group for Cognition Battery.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_mm_fac_aov_df_cognition_main <- tbl_mm_fac_aov_df_cognition_main %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df2", "F"), digits = 1) %>% 
+  colformat_double( j = c("P"), digits = 3 ) 
+# Print
+tbl_mm_fac_aov_df_cognition_main
 ```
-## Contrasts for Comparing Groups
+##Contrasts for Comparing Groups
 ```{r contrasts for groups cognition}
 # Define model for emmeans
 model_emmeans <- ~ group_3
@@ -1457,17 +1464,15 @@ tbl_contr_emm_fac_df$Variable <- c("Speed", rep("", 1),
 # Table for contrasts
 tbl_contr_emm_fac_cognition_main <- tbl_contr_emm_fac_df[c(7, 2, 6, 3:5)]
 ```
-#### Table 5. Mixed Model Contrasts Comparing Groups for Cognition Battery.
-```{r echo = FALSE}
-# Print table
-datatable(tbl_contr_emm_fac_cognition_main, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
-  formatRound(columns = c("df", "t"), digits = 1)
+```{r tab.cap = "Mixed Model Contrasts Comparing Groups for Cognition Battery.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_contr_emm_fac_cognition_main <- tbl_contr_emm_fac_cognition_main %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df", "t"), digits = 1) %>% 
+  colformat_double( j = c("P (unadjusted)"), digits = 3 ) 
+# Print
+tbl_contr_emm_fac_cognition_main
 ```
-## Plot Estimated Marignal Means for Comparing Groups
+##Plot Estimated Marignal Means for Comparing Groups
 ```{r plot groups cognition}
 # New facet label names for variable
 new_labels <- c("Speed","Accuracy","Efficiency")
@@ -1511,7 +1516,7 @@ p.cognition_emmeans_main <- p.cognition_emmeans_main + theme(legend.key.size = u
 p.cognition_comb_all <- plot_grid(p.cognition_desc, p.cognition_emmeans_main + rremove("x.text") + theme( strip.text.y = element_blank() ),
                         labels = c("a", "b"),
                         ncol = 2, nrow = 1,
-                        rel_widths = c(2.3, 0.7))
+                        rel_widths = c(2.4, 0.6))
 
 # Adjust legend size
 p.cognition_comb_all <- p.cognition_comb_all + theme(legend.key.size = unit(0.3, "cm"))
@@ -1524,7 +1529,6 @@ pdf("./Figures/Cognition/p.cognition_comb_all.pdf",
 print(p.cognition_comb_all)
 dev.off()
 ```
-#### Figure 3.Cognition Battery 1: (a) Time course of speed, precision, and efficiency before, during, and after bed rest. (b) Main effect of bed rest. Data are means and SD adjusted for baseline.
-```{r, echo = FALSE, fig.width = 10, fig.height = 8, fig.cap = ""}
-print(p.cognition_comb_all)
+```{r fig.id = "tsplot", fig.cap.style = "Image Caption", fig.width = 7, fig.height = 5, echo = FALSE, fig.cap = "Cognition Battery 1: (a) Time course of speed, precision, and efficiency before, during, and after bed rest. (b) Main effect of bed rest. Data are means and SD adjusted for baseline, age, and sex."}
+p.cognition_comb_all
 ```

@@ -182,7 +182,7 @@ df_pto <- rbindlist(lapply(list_of_files, fread),
           use.names = T, idcol = "FileName", fill=T)
 
 df_pto <- as.data.frame(df_pto)
-df_pto <- df_pto[c(2,5:6,8,38,40,42,53,58:69)]
+df_pto <- df_pto[c(2,5:6,8, 31, 38,40,42,53,58:69)]
 
 names(df_pto) <- tolower(names(df_pto)) # lower
 df_pto <- subset(df_pto, session != "Demo") # exclude 'Demo'
@@ -191,6 +191,7 @@ df_pto <- droplevels(df_pto)
 # rename columns
 names(df_pto)[names(df_pto)=="participant"] <- "spatial_cognition_id" # rename id since spatial cognition used distinct id 
 names(df_pto)[names(df_pto)=="condition"] <- "cond.f" 
+names(df_pto)[names(df_pto)=="turn axis"] <- "axis" 
 names(df_pto)[names(df_pto)=="session"] <- "time.f" 
 df_pto$time.f <- revalue(df_pto$time.f, c("1" = "BDC-3", "2" = "HDT2", "3" = "HDT30", "4" = "HDT59", "5" = "R+12")) # relabel time.f
 names(df_pto)[names(df_pto)=="homing distance error"] <- "distance_error_signed"
@@ -211,8 +212,8 @@ names(df_pto)[names(df_pto)=="overestimation of turning angle wrt nonturner stra
 names(df_pto)[names(df_pto)=="overestimation of turning angle"] <- "overestimation_turning_angle"
 
 # convert data types
-df_pto[c(1:2,4,13:20)] <- lapply(df_pto[c(1:2,4,13:20)], as.factor)
-df_pto[c(3,5:12)] <- lapply(df_pto[c(3,5:12)], as.numeric)
+df_pto[c(1:2,4,5, 14:21)] <- lapply(df_pto[c(1:2,4,5, 14:21)], as.factor)
+df_pto[c(3,6:13)] <- lapply(df_pto[c(3,6:13)], as.numeric)
 
 df_pto <- subset(df_pto, cond.f !="1") # drop cond 1
 
@@ -227,8 +228,30 @@ df_outlier <- df_pto[-which(df_pto$rt %in% df_outlier),]
 # replace df 
 df_pto <- df_outlier
 
+#######
+
+
+# check outliers based on IQR
+df_outlier <- df_pto$pe_abs[which(df_pto$pe_abs %in% boxplot.stats(df_pto$pe_abs)$out)]
+length(df_outlier) # number for k
+
+df_outlier_pe_abs <- df_pto$pe_abs[which(df_pto$pe_abs %in% boxplot.stats(df_pto$pe_abs)$out)]
+
+length(df_outlier_pe_abs) # number for k
+
+# Rosner test for outliers
+#3rosnerTest(df_pto$pe_abs, k = 0, warn = F)
+
+# remove outliers
+#df_pto_wo_out <- subset(df_pto, pe_abs < 161.30993 & pe_abs > -161.96376)
+
+# replace df 
+#df_pto <- df_pto_wo_out
+
+##################
+
 # compute accuracy and rt
-df_pto <- ddply(df_pto, c("spatial_cognition_id", "time.f","cond.f"), summarise,
+df_pto <- ddply(df_pto, c("spatial_cognition_id", "time.f","cond.f", "axis"), summarise,
                     rating=mean(rating),
                     rt=mean(rt),
                     dist_error=mean(distance_error_abs),
@@ -241,25 +264,19 @@ df_pto <- ddply(df_pto, c("spatial_cognition_id", "time.f","cond.f"), summarise,
                                           
 
 # drop unused vars
-df_pto <- df_pto[-c(9:12)]
+df_pto <- df_pto[-c(10:13)]
 
 # Compute z scores
 
 # define id vars for long format, and bdc data
-id_vars <- c("spatial_cognition_id", "time.f", "cond.f")
+id_vars <- c("spatial_cognition_id", "time.f", "cond.f", "axis")
 bdc <- c("BDC-3")
 
 # Run z scores
 df_pto_z <- func_z(df_pto)
 
 # Invert so that higher number means better performance
-df_pto_z[c(4:6)] <- df_pto_z[c(4:6)] * -1
-
-# Add efficiency score
-df_pto_z$eff_z <- (df_pto_z$rt_z + df_pto_z$variable_pointing_error_z) / 2
-
-# invert so that higher number means better performance
-df_pto_z[c(4:8)] <- df_pto_z[c(4:8)] * -1
+df_pto_z[c(5:9)] <- df_pto_z[c(5:9)] * -1
 
 # Add efficiency score
 df_pto_z$eff_z <- (df_pto_z$rt_z + df_pto_z$variable_pointing_error_z) / 2
@@ -417,6 +434,19 @@ df_navis_2d[c(4:10)] <- lapply(df_navis_2d[c(4:10)], as.numeric)
 #14: 2
 #20: 1
 
+# detect outliers
+# check outliers based on IQR
+df_outlier <- df_navis_2d$rt[which(df_navis_2d$rt %in% boxplot.stats(df_navis_2d$rt)$out)]
+length(df_outlier) 
+
+# remove outliers
+df_outlier <- df_navis_2d[-which(df_navis_2d$rt %in% df_outlier),]
+
+# replace df 
+df_navis_2d <- df_outlier
+
+
+
 # relabel time.f
 df_navis_2d$time.f <- revalue(df_navis_2d$time.f, c("1" = "BDC-3", "2" = "HDT2", "3" = "HDT30", "4" = "HDT59", "5" = "R+12"))
 
@@ -499,6 +529,17 @@ df_navis_vr <- df_navis_vr[-c(8,9,11)]
 # compute accuracy in percent
 df_navis_vr$acc <- df_navis_vr$acc/8*100
 
+# detect outliers
+# check outliers based on IQR
+df_outlier <- df_navis_vr$rt[which(df_navis_vr$rt %in% boxplot.stats(df_navis_vr$rt)$out)]
+length(df_outlier) 
+
+# remove outliers
+df_outlier <- df_navis_vr[-which(df_navis_vr$rt %in% df_outlier),]
+
+# replace df 
+df_navis_vr <- df_outlier
+
 # Compute z scores
 
 # define id vars for long format, and bdc data
@@ -526,11 +567,22 @@ df_navis_vr_z$eff_totrevists_z <- (df_navis_vr_z$rt_z + df_navis_vr_z$total_revi
 df_navstrat <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Spatial Cognition/AGBRESA_DATA_060921.xlsx", sheet = "DATA NAVSTRAT raw")
 
 # convert data types
-df_navstrat[c(1:4)] <- lapply(df_navstrat[c(1:4)], factor)
+df_navstrat[c(1:4)] <- lapply(df_navstrat[c(1:4)], as.factor)
 df_navstrat[c(5:7)] <- lapply(df_navstrat[c(5:7)], as.numeric)
 
 # Rename columns
 names(df_navstrat)[names(df_navstrat)=="corrects"] <- "accuracy"
+
+# detect outliers
+# check outliers based on IQR
+df_outlier <- df_navstrat$rt[which(df_navstrat$rt %in% boxplot.stats(df_navstrat$rt)$out)]
+length(df_outlier) 
+
+# remove outliers
+#df_outlier <- df_navstrat[-which(df_navstrat$rt %in% df_outlier),]
+
+# replace df 
+#df_navstrat <- df_outlier
 
 # compute z scores
 df_navstrat_z <- df_navstrat
@@ -585,6 +637,16 @@ df_cogmap_agbresa <- merge(df_demo[c(1,3:6)], df_cogmap_agbresa, by="id") # merg
 df_cogmap <- rbind(df_cogmap_rsl, df_cogmap_agbresa)
 df_cogmap[c(1:4)] <- lapply(df_cogmap[c(1:4)], as.factor)
 
+# detect outliers
+# check outliers based on IQR
+df_outlier <- df_cogmap$rt_1[which(df_cogmap$rt_1 %in% boxplot.stats(df_cogmap$rt_1)$out)]
+length(df_outlier) 
+
+# remove outliers
+df_outlier <- df_cogmap[-which(df_cogmap$rt_1 %in% df_outlier),]
+
+# replace df 
+df_cogmap <- df_outlier
 
 # compute z scores
 df_cogmap_z <- df_cogmap
@@ -604,6 +666,17 @@ df_pm <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Spatial Cognition/A
 df_pm[c(1:2)] <- lapply(df_pm[c(1:2)], factor)
 df_pm[c(3:20)] <- lapply(df_pm[c(3:20)], as.numeric)
 names(df_pm) <- tolower(names(df_pm))#lower
+
+# detect outliers
+# check outliers based on IQR
+df_outlier <- df_pm$Response_RT[which(df_pm$Response_RT %in% boxplot.stats(df_pm$Response_RT)$out)]
+length(df_outlier) 
+
+# remove outliers
+#df_outlier <- df_pm[-which(df_pm$Response_RT %in% df_outlier),]
+
+# replace df 
+#df_pm <- df_outlier
 
 # compute z scores
 df_pm_z <- df_pm
@@ -692,6 +765,19 @@ df_sot <- ddply(df_sot, c("spatial_cognition_id", "time.f"), summarise,
                 )
 df_sot <- as.tibble(df_sot)
 df_sot[c(1:2)] <- lapply(df_sot[c(1:2)], as.factor)
+
+# detect outliers
+# check outliers based on IQR
+df_outlier <- df_sot$rt[which(df_sot$rt %in% boxplot.stats(df_sot$rt)$out)]
+length(df_outlier) 
+
+# remove outliers
+df_outlier <- df_sot[-which(df_sot$rt %in% df_outlier),]
+
+# replace df 
+df_sot <- df_outlier
+
+
 # compute z scores
 df_sot_z <- df_sot
 df_sot_z[c(3:5)] <- lapply(df_sot_z[c(3:5)], scale, scale = TRUE) # standardize
@@ -713,11 +799,13 @@ df_sot <- droplevels(df_sot)
 ### Dual Task
 ```{r Dual Task}
 # read data
+#df_dualtask <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Spatial Cognition/dualResults_inclSOA_291121.xlsx", sheet = 1)
+
 df_dualtask <- read_excel("/Users/astahn/Publications/AGBRESA/Data/Spatial Cognition/AGBRESA_DATA_060921.xlsx", sheet = "DATA DUAL")
 
-# convert data types
-df_dualtask[c(1:5)] <- lapply(df_dualtask[c(1:5)], factor)
-df_dualtask[c(6:9)] <- lapply(df_dualtask[c(6:9)], as.numeric)
+# rename columns
+#names(df_dualtask)[names(df_dualtask)=="id"] <- "spatial_cognition_id"
+#names(df_dualtask)[names(df_dualtask)=="session"] <- "time.f"
 
 # delete leading zeros in id
 df_dualtask$spatial_cognition_id <- sub("^0+", "", df_dualtask$spatial_cognition_id)
@@ -727,14 +815,54 @@ names(df_dualtask)[names(df_dualtask)=="hit"] <- "accuracy"
 #df_dualtask[c(6:9)] <- lapply(df_dualtask[c(6:9)], scale, scale = TRUE) #standardize
 #colnames(df_dualtask)[c(6:9)] <- paste(colnames(df_dualtask)[c(6:9)], "z", sep="_") #clarify col names
 
+# convert data types
+df_dualtask[c(1:5)] <- lapply(df_dualtask[c(1:5)], as.factor)
+df_dualtask[c(6:9)] <- lapply(df_dualtask[c(6:9)], as.numeric)
+
+# detect outliers
+# check outliers based on IQR
+df_outlier <- df_dualtask$rt[which(df_dualtask$rt %in% boxplot.stats(df_dualtask$rt)$out)]
+length(df_outlier) 
+
+# remove outliers
+#df_outlier <- df_dualtask[-which(df_dualtask$rt %in% df_outlier),]
+
+# replace df 
+#df_dualtask <- df_outlier
+
 # Compute z scores
 
 # define id vars for long format, and bdc data
-id_vars <- c("spatial_cognition_id", "time.f", "task", "stimType","target")
+#id_vars <- c("spatial_cognition_id", "time.f", "task", "stimType", "target", "soa")
+id_vars <- c("spatial_cognition_id", "time.f", "task", "stimType", "target")
 bdc <- c("BDC-6")
 
 # Run z scores
 df_dualtask_z <- func_z(df_dualtask)
+
+func_z <- function(x) {
+  tmp <- reshape2::melt(x, id.vars = id_vars) 
+  dat_bdc <- func_bdc(tmp)
+  tmp <- merge(tmp, dat_bdc, by ="variable")
+  tmp$z <- (tmp$value - tmp$mean_bdc) / tmp$sd_bdc
+  tmp$variable <- paste(tmp$variable, "z", sep="_")
+  tmp_id_var <- paste(id_vars, collapse = "+")
+  id_vars_dep <- paste(tmp_id_var, "~ variable" )
+  tmp <- reshape2::dcast(tmp, id_vars_dep, value.var = "z")
+  return(tmp)
+}
+
+#tmp <- reshape2::melt(df_dualtask, id.vars = id_vars) 
+#  dat_bdc <- func_bdc(tmp)
+#  tmp <- merge(tmp, dat_bdc, by ="variable")
+#  tmp$z <- (tmp$value - tmp$mean_bdc) / tmp$sd_bdc
+#  tmp$variable <- paste(tmp$variable, "z", sep="_")
+#  reshape2::dcast(tmp[-c(8:10)], spatial_cognition_id+time.f+task+stimType+target+soa ~ variable, value.var = "z")
+  
+#  tmp_id_var <- paste(id_vars, collapse = "+")
+#  id_vars_dep <- paste(tmp_id_var, "~ variable" )
+#  tmp <- reshape2::dcast(tmp, id_vars_dep, value.var = "z")
+#  return(tmp)
 
 # Invert so that higher number means better performance
 df_dualtask_z[c(7:9)] <- df_dualtask_z[c(7:9)] * -1
@@ -759,8 +887,18 @@ names(df_switch)
 df_switch[c(1:6)] <- lapply(df_switch[c(1:6)], as.factor)
 df_switch[c(7:10)] <- lapply(df_switch[c(7:10)], as.numeric)
 
-# Compute z scores
+# detect outliers
+# check outliers based on IQR
+df_outlier <- df_switch$rt[which(df_switch$rt %in% boxplot.stats(df_switch$rt)$out)]
+length(df_outlier) 
 
+# remove outliers
+df_outlier <- df_switch[-which(df_switch$rt %in% df_outlier),]
+
+# replace df 
+df_switch <- df_outlier
+
+# Compute z scores
 # define id vars for long format, and bdc data
 id_vars <- c("spatial_cognition_id", "time.f", "task","cti","type","valence")
 bdc <- c("BDC-6")
@@ -796,12 +934,12 @@ df_sut_z <- df_sut_z[c(8,2:7)]
 df_pto <- merge(df_pto, data.id, by="spatial_cognition_id")
 df_pto$id <- as.factor(as.character(df_pto$id))
 names(df_pto)
-df_pto <- df_pto[c(9, 2:8)]
+df_pto <- df_pto[c(10, 2:9)]
 
 df_pto_z <- merge(df_pto_z, data.id, by="spatial_cognition_id")
 df_pto_z$id <- as.factor(as.character(df_pto_z$id))
 names(df_pto_z)
-df_pto_z <- df_pto_z[c(10, 2:9)]
+df_pto_z <- df_pto_z[c(11, 2:10)]
 
 # 4mtn
 df_4mtn <- merge(df_4mtn, data.id, by="spatial_cognition_id")

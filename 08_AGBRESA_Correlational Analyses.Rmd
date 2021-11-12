@@ -1,0 +1,2704 @@
+---
+title: "AGBRESA Correlational Analyses"
+author: "A Stahn"
+date: "10/27/2021"
+output: html_document
+---
+```{r include = FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, dpi =300)
+```
+# Prepare Script
+## Required Packages
+```{r load required packages, message = FALSE}
+library(knitr) # for kable
+library(readxl) # read xls
+library(DT) # Print table nicely in markdown
+library(reshape2) # wide to long
+library(plyr) # ldply
+library(tidyverse) # for fct_relevel
+
+library(correlation)
+library(ggpmisc) # add regression results
+
+library(lme4) # for adding mixed model functions to plot
+library(lmerTest) # for adding mixed model functions to plot
+library(emmeans) # for adding mixed model marignal means and se to plot
+library(qdapTools) # list_df2df(tbl_mm_fac_aov)
+
+library(ggpubr) # for compare means, descriptives and theme_pubr
+library(ggplot2)
+library(ggsci)
+library(scales)
+library(cowplot) # for plot_grid, combine plots using cowplot
+```
+## Print Session Info
+```{r print R and package versions}
+print(sessionInfo())
+```
+## Themes for Plots
+```{r create themes and correction factors}
+# Correct ggplot2 pts and fonts
+ggplot_factor_line <- ggplot2::.pt*72.27/96
+ggplot_factor_font = 1.0
+
+# Create project report theme
+theme_report_white  <-  theme_pubr() + theme(
+  axis.line = element_line(size = 0.5 / ggplot_factor_line,color="black"),
+  axis.ticks = element_line(size = 0.5 / ggplot_factor_line, color="black"),
+  axis.ticks.length = unit(0.2, "cm"), 
+  text = element_text(size = 8 * ggplot_factor_font,
+                      family="Helvetica",
+                      colour="black"),
+  axis.text.x=element_text(angle = 0, 
+                           vjust = 0.5,
+                           size = 8 * ggplot_factor_font,
+                           family = "Helvetica",
+                           colour = "black"), #face="bold"
+  axis.text.y = element_text(angle = 0,
+                            vjust = 0.5,
+                            size= 8 * ggplot_factor_font,
+                            family = "Helvetica",
+                            colour="black"),
+  axis.title.x = element_text(angle = 0,
+                            vjust = 0.5,
+                            size= 8 * ggplot_factor_font,
+                            family="Helvetica",
+                            colour="black",
+                            face="bold"),
+  axis.title.y = element_text(angle = 90,
+                            vjust = 0.5,
+                            size= 8 * ggplot_factor_font,
+                            family = "Helvetica",
+                            colour = "black",
+                            face = "bold") # face = "bold" 
+  )
+
+theme_report_black  <-  theme_pubr() + theme(
+                                      #line thickness
+                                      axis.line = element_line(size = 0.75/ggplot_factor_line,color="white"),
+                                      axis.ticks = element_line(size = 0.75/ggplot_factor_line, color="white"),
+                                      axis.ticks.length = unit(0.2, "cm"),
+                                      #font size axis labels
+                                      text=element_text(size=12*ggplot_factor_font,family="Helvetica",colour="white"),
+                                      axis.text.x=element_text(angle=0,vjust =0.5,
+                                                    size=12*ggplot_factor_font,family="Helvetica",colour="white"),#face="bold"
+                                      axis.text.y=element_text(angle=0,vjust=0.5,
+                                                               size=12*ggplot_factor_font,family="Helvetica",colour="white"),
+                                      axis.title.x=element_text(angle=0,vjust =0.5,
+                                                                size=14*ggplot_factor_font,family="Helvetica",colour="white",face="bold"),
+                                      axis.title.y=element_text(angle=90,vjust =0.5,
+                                                                size=14*ggplot_factor_font,family="Helvetica",colour="white",face="bold"))+
+  theme(plot.background = element_rect(fill = "black", color="black"))+
+  theme(panel.background = element_rect(fill = "black",color="black"))+
+  theme(legend.background = element_rect(fill = "black",color="black"))
+
+library("scales")
+show_col(pal_npg("nrc")(10))
+
+```
+## Load Data
+```{r load data}
+# Demographics
+df_demo <- read_excel("./Data/Data Demographics.xlsx", sheet = "Data Demo")
+df_demo[c(1:5)] <- lapply(df_demo[c(1:5)], as.factor)
+
+df_bio <- read_excel("./Data/Data Int Bio.xlsx", sheet = "Data Bio Int")
+df_bio[c(1:3)] <- lapply(df_bio[c(1:3)], as.factor)
+
+df_fmri <- read_excel("./Data/Data Int MRI.xlsx", sheet = "Data MRI Func Int")
+df_fmri[c(1,2,4)] <- lapply(df_fmri[c(1,2,4)], as.factor)
+df_fmri[c(3)] <- lapply(df_fmri[c(3)], as.numeric)
+
+df_mri <- read_excel("./Data/Data Int MRI.xlsx", sheet = "Data MRI Struc Int")
+df_mri[c(1:3)] <- lapply(df_mri[c(1:3)], as.factor)
+
+
+df_cognition <- read_excel("./Data/Data Int Cog.xlsx", sheet = "Data Cognition Int")
+df_cognition[c(1:4)] <- lapply(df_cognition[c(1:4)], as.factor)
+
+df_spacog_1 <- read_excel("./Data/Data Int Cog.xlsx", sheet = "Data Spatial Cognition 1 Int")
+df_spacog_1[c(1:4)] <- lapply(df_spacog_1[c(1:4)], as.factor)
+
+df_spacog_2 <- read_excel("./Data/Data Int Cog.xlsx", sheet = "Data Spatial Cognition 2 Int")
+df_spacog_2[c(1:4)] <- lapply(df_spacog_2[c(1:4)], as.factor)
+```
+# Correlations Cognitive Performance
+```{r correl cog}
+# Function correlational analyses, requires library(correlation)
+func_corr <- function (df1, df2) {
+   df_tmp <- merge(df1, df2, by = "id") %>%
+     correlation() %>%
+     as.data.frame()
+   df_tmp <- df_tmp[order(df_tmp$r),]
+  return(df_tmp)
+}
+
+# Rearrange data for func_corr 
+df_mri_ <- as_tibble ( dcast(df_mri, id ~ variable + value_type, value.var = "value") )
+df_fmri_ <- as_tibble ( reshape2::dcast( as.data.frame(df_fmri), id ~ variable + value_type, value.var = "value") )
+df_bio_ <- as_tibble ( dcast(df_bio, id ~ variable + value_type, value.var = "value") )
+df_spacog_2_ <- as_tibble ( dcast(df_spacog_2, id ~ variable + task + value_type, value.var = "value") )
+df_spacog_1_ <- as_tibble ( dcast(df_spacog_1, id ~ variable + task + value_type, value.var = "value") )
+df_cognition_ <- as_tibble ( dcast(df_cognition, id ~ variable + task + value_type, value.var = "value") )
+
+# MRI vs spacog_1
+df_mri_[c(70, 108:209)]
+
+df_corr_vbm_hc_df <- df_mri_[c(70, 150:209)] %>%
+  correlation() %>%
+  filter(str_detect(Parameter1, 'dg_z_change_score'))
+
+df <- merge(df_vbm_bdc_hdt59, df_hc[c(1,2,20)], by = c("id", "time.f"))
+df <- merge(df_demo[c(1,3,5)], df, by= c("id"))
+ggplot(df, aes(x = post_min_pre_roi1_z, y = dg_z), color = group_3, fill = group_3) + theme_report() +
+  geom_smooth(method = lm, se = T, size = 0.5, color = "black") +
+  geom_point(aes(colour = group_3), size = 2) 
+
+x_var1 <- "dg_z"
+y_var1 <- "post_min_pre_roi1_z"
+ "post_min_pre_roi1_z" "post_min_pre_roi2_z" "post_min_pre_roi3_z" "post_min_pre_roi4_z"
+ [7] "post_min_pre_roi5_z" "post_min_pre_roi6_z" "post_min_pre_roi7_z" "pre_min_post_roi1_z" "pre_min_post_roi2_z" "pre_min_post_roi3_z"
+[13] "pre_min_post_roi4_z" "pre_min_post_roi5_z" "pre_min_post_roi6_z" "pre_min_post_roi7_z" "pre_min_post_roi8_z" "dg_z" 
+ 
+function_scatter_plot(df)
+
+
+
+
+"dg_right_z_change_score"  66
+ "dg_z_change_score"  
+df_corr_vbm_hc_df <- func_corr(df_mri_, df_spacog_1_)
+df_tmp <- df_corr_mri_df_spacog_1_df %>%
+  filter(str_detect(Parameter1, 'dg'))
+df_tmp <- df_tmp[order(df_tmp$r),]
+
+
+# MRI vs spacog_1
+df_corr_mri_df_spacog_1_df <- func_corr(df_mri_, df_spacog_1_)
+df_tmp <- df_corr_mri_df_spacog_1_df %>%
+  filter(str_detect(Parameter1, 'dg'))
+df_tmp <- df_tmp[order(df_tmp$r),]
+
+df_plot_mri_spacog_1 <- merge(df_mri_, df_spacog_1_, by = "id")
+  
+### NOTE: FOllowing plots not convincing
+# Plot insula_left_z_change_score, acc_z_sut_change_score, 0.5
+p_mri_spacog_1_insula_l_change_sut_acc <- ggplot(df_plot_mri_spacog_1, 
+                  aes(x = insula_left_z_change_score, 
+                      y = acc_z_sut_change_score)) + theme_report_white +
+  geom_smooth(method = lm, se = T, size = 0.5, color = "black") +
+  geom_point(size = 2, color = "deepskyblue1")+
+  labs(y = "Change in Insula L", x = "Change in SUT Acc")
+
+# Add equation
+my.formula <- y ~ x
+p_mri_spacog_1_insula_l_change_sut_acc <- p_mri_spacog_1_insula_l_change_sut_acc + stat_poly_eq(formula = my.formula, 
+                                    aes(label = paste(..rr.label.., ..p.value.label..,sep = "*\", \"*")), 
+                                    parse = TRUE, color = "black",
+                                    p.digits = 2)  
+
+# Plot insula_left_z_change_score, eff_z_sut_change_score, 0
+p_mri_spacog_1_insula_l_change_sut_eff <- ggplot(df_plot_mri_spacog_1, 
+                  aes(x = insula_left_z_change_score, 
+                      y = eff_z_sut_change_score)) + theme_report_white +
+  geom_smooth(method = lm, se = T, size = 0.5, color = "black") +
+  geom_point(size = 2, color = "deepskyblue1")+
+  labs(y = "Change in Insula L", x = "Change in SUT Eff")
+
+# Add equation
+my.formula <- y ~ x
+p_mri_spacog_1_insula_l_change_sut_eff <- p_mri_spacog_1_insula_l_change_sut_eff + stat_poly_eq(formula = my.formula, 
+                                    aes(label = paste(..rr.label.., ..p.value.label..,sep = "*\", \"*")), 
+                                    parse = TRUE, color = "black",
+                                    p.digits = 2)  
+
+# Plot insula_left_z_hdt_mean_bdc_adj, eff_z_sut_hdt_mean_bdc_adj (acc_z_sut_hdt_mean_bdc_adj), 
+p_mri_spacog_1_insula_l_hdt_mean_sut <- ggplot(df_plot_mri_spacog_1, 
+                  aes(x = insula_left_z_hdt_mean_bdc_adj, 
+                      y = eff_z_sut_hdt_mean_bdc_adj)) + theme_report_white +
+  geom_smooth(method = lm, se = T, size = 0.5, color = "black") +
+  geom_point(size = 2, color = "deepskyblue1")+
+  labs(y = "Mean HDT Insula L adj", x = "Mean HDT in SUT Eff adj")
+
+# Add equation
+my.formula <- y ~ x
+p_mri_spacog_1_insula_l_hdt_mean_sut <- p_mri_spacog_1_insula_l_hdt_mean_sut + stat_poly_eq(formula = my.formula, 
+                                    aes(label = paste(..rr.label.., ..p.value.label..,sep = "*\", \"*")), 
+                                    parse = TRUE, color = "black",
+                                    p.digits = 2)  
+
+
+# Plot insula_left_z_hdt_mean_bdc_adj, , 0.36
+p_mri_spacog_1_insula_l_hdt_mean_gm <- ggplot(df_plot_mri_spacog_1, 
+                  aes(x = insula_left_z_hdt_mean_bdc_adj, 
+                      y = eff_z_gm_hdt_mean_bdc_adj)) + theme_report_white +
+  geom_smooth(method = lm, se = T, size = 0.5, color = "black") +
+  geom_point(size = 2, color = "deepskyblue1")+
+  labs(y = "Mean HDT Insula L adj", x = "Mean HDT in GM Eff adj")
+
+# Add equation
+my.formula <- y ~ x
+p_mri_spacog_1_insula_l_hdt_mean_gm <- p_mri_spacog_1_insula_l_hdt_mean_gm + stat_poly_eq(formula = my.formula, 
+                                    aes(label = paste(..rr.label.., ..p.value.label..,sep = "*\", \"*")), 
+                                    parse = TRUE, color = "black",
+                                    p.digits = 2)  
+
+# Plot insula_right_z_mean_hdt, rt_z_4mtn_hdt_mean_bdc_adj, 0.36
+p_mri_spacog_1_insula_r_hdt_mean_4mtn <- ggplot(df_plot_mri_spacog_1, 
+                  aes(x = insula_right_z_mean_hdt, 
+                      y = rt_z_4mtn_hdt_mean_bdc_adj)) + theme_report_white +
+  geom_smooth(method = lm, se = T, size = 0.5, color = "black") +
+  geom_point(size = 2, color = "deepskyblue1")+
+  labs(y = "Mean HDT Insula R", x = "Mean HDT in 4MTN RT adj")
+
+# Add equation
+my.formula <- y ~ x
+p_mri_spacog_1_insula_r_hdt_mean_4mtn <- p_mri_spacog_1_insula_r_hdt_mean_4mtn + stat_poly_eq(formula = my.formula, 
+                                    aes(label = paste(..rr.label.., ..p.value.label..,sep = "*\", \"*")), 
+                                    parse = TRUE, color = "black",
+                                    p.digits = 2)  
+
+
+
+# Plot dg_left_z_hdt_mean_bdc_adj, , 0.4476557
+p_mri_spacog_1_dg_l_hdt_mean_navis_2d_mean <- ggplot(df_plot_mri_spacog_1, 
+                  aes(x = dg_left_z_hdt_mean_bdc_adj, 
+                      y = rt_z_navis_2d_hdt_mean_bdc_adj)) + theme_report_white +
+  geom_smooth(method = lm, se = T, size = 0.5, color = "black") +
+  geom_point(size = 2, color = "deepskyblue1")+
+  labs(y = "Mean HDT DG L adj", x = "Mean HDT in Navis 2D RT adj")
+
+# Add equation
+my.formula <- y ~ x
+p_mri_spacog_1_dg_l_hdt_mean_navis_2d_mean <- p_mri_spacog_1_dg_l_hdt_mean_navis_2d_mean + stat_poly_eq(formula = my.formula, 
+                                    aes(label = paste(..rr.label.., ..p.value.label..,sep = "*\", \"*")), 
+                                    parse = TRUE, color = "black",
+                                    p.digits = 2)  
+
+
+
+# fMRI vs spacog_1
+df_corr_fmri_df_spacog_1_df <- func_corr(df_fmri_, df_spacog_1_)
+df_tmp <- df_corr_fmri_df_spacog_1_df %>%
+  filter(str_detect(Parameter1, 'AG'))
+df_tmp <- df_tmp[order(df_tmp$r),]
+
+df_plot_fmri_spacog_1 <- merge(df_fmri_, df_spacog_1_, by = "id")
+
+cAGvCTRL_BDC_HDT59_z_change_score, rt_z_4mtn_hdt_mean_bdc_adj, 0.38 ???
+  
+, 
+
+# Plot cAGvCTRL_BDC_HDT59_z_change_score, rt_z_4mtn_hdt_mean_bdc_adj, 0.38
+p_mri_spacog_1_cAGvCTRL_BDC_HDT59_z_change_score_4MTN_rt_hdt_mean <- ggplot(df_plot_fmri_spacog_1, 
+                  aes(x = cAGvCTRL_BDC_HDT59_z_change_score, 
+                      y = rt_z_4mtn_hdt_mean_bdc_adj)) + theme_report_white +
+  geom_smooth(method = lm, se = T, size = 0.5, color = "black") +
+  geom_point(size = 2, color = "deepskyblue1")+
+  labs(y = "Change in NBS cAG and CTRL", x = "Mean HDT 4MTN RT adj")
+
+# Add equation
+my.formula <- y ~ x
+p_mri_spacog_1_cAGvCTRL_BDC_HDT59_z_change_score_4MTN_rt_hdt_mean <- p_mri_spacog_1_cAGvCTRL_BDC_HDT59_z_change_score_4MTN_rt_hdt_mean + stat_poly_eq(formula = my.formula, 
+                                    aes(label = paste(..rr.label.., ..p.value.label..,sep = "*\", \"*")), 
+                                    parse = TRUE, color = "black",
+                                    p.digits = 2)  
+
+# Plot cAGvCTRL_BDC_HDT59_z_change_score, rt_z_4mtn_hdt_mean_bdc_adj, 0.38
+p_mri_spacog_1_iAG_l_hc_BDC_HDT59_z_post_4MTN_rt_hdt_mean <- ggplot(df_plot_fmri_spacog_1, 
+                  aes(x = iAG_l_hc_BDC_HDT59_z_post, 
+                      y = rt_z_4mtn_hdt_mean_bdc_adj)) + theme_report_white +
+  geom_smooth(method = lm, se = T, size = 0.5, color = "black") +
+  geom_point(size = 2, color = "deepskyblue1")+
+  labs(y = "Left HC FC (iAG and CTRL)", x = "Mean HDT 4MTN RT adj")
+
+# Add equation
+my.formula <- y ~ x
+p_mri_spacog_1_iAG_l_hc_BDC_HDT59_z_post_4MTN_rt_hdt_mean <- p_mri_spacog_1_iAG_l_hc_BDC_HDT59_z_post_4MTN_rt_hdt_mean + stat_poly_eq(formula = my.formula, 
+                                    aes(label = paste(..rr.label.., ..p.value.label..,sep = "*\", \"*")), 
+                                    parse = TRUE, color = "black",
+                                    p.digits = 2)  
+
+
+
+
+# MRI vs spacog_2
+df_corr_mri_df_spacog_2_df <- func_corr(df_mri_, df_spacog_2_)
+df_tmp <- df_corr_mri_df_spacog_2_df %>%
+  filter(str_detect(Parameter1, 'insula'))
+df_tmp <- df_tmp[order(df_tmp$r),]
+
+df_plot_mri_spacog_2 <- merge(df_mri_, df_spacog_2_, by = "id")
+
+phc_left_z_hdt_mean_bdc_adj, acc_z_cogmap_post, 0.43
+insula_right_z_hdt_mean_bdc_adj,  acc_z_cogmap_post
+erc_left_z_hdt_mean_bdc_adj,  acc_z_cogmap_post
+
+insula_left_z_change_score, rt_z_sot_post/eff_z_sot_post, 0.6
+insula_left_z_hdt_mean_bdc_adj
+insula_right_z_hdt_mean_bdc_adj, eff_z_navstrat_diff_post/acc_z_navstrat_diff_post, 0.4557962
+
+dg_right_z_post, eff_z_navis_vr_post, 0.3124706
+
+# Plot cAGvCTRL_BDC_HDT59_z_change_score, rt_z_4mtn_hdt_mean_bdc_adj, 0.38
+p_mri_spacog_2_insula_r_hdt_mean_adj_Navstrat_diffpost <- ggplot(df_plot_mri_spacog_2, 
+                  aes(x = insula_right_z_hdt_mean_bdc_adj, 
+                      y = eff_z_navstrat_diff_post)) + theme_report_white +
+  geom_smooth(method = lm, se = T, size = 0.5, color = "black") +
+  geom_point(size = 2, color = "deepskyblue1")+
+  labs(y = "Insula R HDT Mean adj", x = "Nav Strat Eff")
+
+# Add equation
+my.formula <- y ~ x
+p_mri_spacog_2_insula_r_hdt_mean_adj_Navstrat_diffpost <- p_mri_spacog_2_insula_r_hdt_mean_adj_Navstrat_diffpost + stat_poly_eq(formula = my.formula, 
+                                    aes(label = paste(..rr.label.., ..p.value.label..,sep = "*\", \"*")), 
+                                    parse = TRUE, color = "white",
+                                    p.digits = 2)  
+
+
+#OK...
+# Plot dg_right_z_post, eff_z_navis_vr_post, 0.3124706
+p_mri_spacog_2_dg_r_post_Navis_VR_post <- ggplot(df_plot_mri_spacog_2, 
+                  aes(x = dg_right_z_post, 
+                      y = eff_z_navis_vr_post)) + theme_report_white +
+  geom_smooth(method = lm, se = T, size = 0.5, color = "black") +
+  geom_point(size = 2, color = "deepskyblue1")+
+  labs(y = "DG R HDT59", x = "Navigation Search VR Eff R+1")
+
+# Add equation
+my.formula <- y ~ x
+p_mri_spacog_2_dg_r_post_Navis_VR_post <- p_mri_spacog_2_dg_r_post_Navis_VR_post + stat_poly_eq(formula = my.formula, 
+                                    aes(label = paste(..rr.label.., ..p.value.label..,sep = "*\", \"*")), 
+                                    parse = TRUE, color = "black",
+                                    p.digits = 2)  
+
+
+
+
+# fMRI vs spacog_2
+df_corr_fmri_df_spacog_2_df <- func_corr(df_fmri_, df_spacog_2_)
+df_tmp <- df_corr_fmri_df_spacog_2_df %>%
+  filter(str_detect(Parameter1, 'AG'))
+df_tmp <- df_tmp[order(df_tmp$r),]
+
+df_plot_fmri_spacog_2 <- merge(df_fmri_, df_spacog_2_, by = "id")
+
+
+iAG_l_hc_BDC_HDT59_z_post, acc_z_sot_post
+AGvCTRL_BDC_HDT59_z_post, acc_z_sot_post
+AGvCTRL_BDC_HDT59_z_change_score, eff_z_navstrat_same_post / rt_z_navstrat_diff_post
+
+
+# Plot cAGvCTRL_BDC_HDT59_z_post, rt_z_gm_post 0,56
+p_mri_spacog_2_cAGvCTRL_BDC_HDT59_post_rt_z_gm_post <- ggplot(df_plot_fmri_spacog_2, 
+                  aes(x = cAGvCTRL_BDC_HDT59_z_post, 
+                      y = rt_z_gm_post)) + theme_report_white +
+  geom_smooth(method = lm, se = T, size = 0.5, color = "black") +
+  geom_point(size = 2, color = "deepskyblue1")+
+  labs(y = "FC on HDT59", x = "Total RT on R+1")
+
+# Add equation
+my.formula <- y ~ x
+p_mri_spacog_2_cAGvCTRL_BDC_HDT59_post_rt_z_gm_post <- p_mri_spacog_2_cAGvCTRL_BDC_HDT59_post_rt_z_gm_post + stat_poly_eq(formula = my.formula, 
+                                    aes(label = paste(..rr.label.., ..p.value.label..,sep = "*\", \"*")), 
+                                    parse = TRUE, color = "white",
+                                    p.digits = 2)  
+
+
+# MRI vs Cognition
+df_corr_mri_df_cognition_df <- func_corr(df_mri_, df_cognition_)
+df_tmp <- df_corr_mri_df_cognition_df %>%
+  filter(str_detect(Parameter1, 'dg'))
+df_tmp <- df_tmp[order(df_tmp$r),]
+
+df_plot_mri_cognition <- merge(df_mri_, df_cognition_, by = "id")
+
+insula_right_z_hdt_mean_bdc_adj, eff_z_DSST_cognition_slope
+insula_right_z_hdt_mean_bdc_adj, rt_z_MRT_cognition_slope
+insula_right_z_hdt_mean_bdc_adj, eff_z_ERT_cognition_slope
+
+
+dg_right_z_hdt_mean_bdc_adj, acc_z_BART_cognition_slope
+dg_right_z_hdt_mean_bdc_adj, eff_z_AM_cognition_slope
+
+# Plot insula_right_z_hdt_mean_bdc_adj, eff_z_ERT_cognition_slope
+p_mri_cognition_insula_R_hdt_mean_adj_eff_z_ERT_cognition_slope <- ggplot(df_plot_mri_cognition, 
+                  aes(x = insula_right_z_hdt_mean_bdc_adj, 
+                      y = eff_z_ERT_cognition_slope)) + theme_report_white +
+  geom_smooth(method = lm, se = T, size = 0.5, color = "black") +
+  geom_point(size = 2, color = "deepskyblue1")+
+  labs(y = "Insula R HDT Mean adj", x = "ERT Eff Slope")
+
+# Add equation
+my.formula <- y ~ x
+p_mri_cognition_insula_R_hdt_mean_adj_eff_z_ERT_cognition_slope <- p_mri_cognition_insula_R_hdt_mean_adj_eff_z_ERT_cognition_slope + stat_poly_eq(formula = my.formula, 
+                                    aes(label = paste(..rr.label.., ..p.value.label..,sep = "*\", \"*")), 
+                                    parse = TRUE, color = "black",
+                                    p.digits = 2)  
+
+# fMRI vs Cognition
+df_corr_fmri_df_cognition_df <- func_corr(df_fmri_, df_cognition_)
+df_tmp <- df_corr_fmri_df_cognition_df %>%
+  filter(str_detect(Parameter1, 'AG'))
+df_tmp <- df_tmp[order(df_tmp$r),]
+
+df_plot_fmri_cognition <- merge(df_fmri_, df_cognition_, by = "id")
+
+
+iAG_l_hc_BDC_HDT59_z_change_score, eff_z_ERT_cognition_slope
+iAG_l_hc_BDC_HDT59_z_change_score, eff_z_VOLT_cognition_slope # OK
+
+AGvCTRL_BDC_HDT59_z_change_score, eff_z_ERT_cognition_slope
+AGvCTRL_BDC_HDT59_z_change_score, acc_z_MRT_cognition_slope
+AGvCTRL_BDC_HDT59_z_change_score, rt_z_NBCK_cognition_slope
+
+cAGvCTRL_BDC_HDT59_z_change_score, acc_z_MRT_cognition_slope
+
+# Plot iAG_l_hc_BDC_HDT59_z_change_score, eff_z_NBCK_cognition_slope, 0./7
+p_mri_cognition_iAG_l_hc_BDC_HDT59_z_change_eff_z_BCK_cognition_slope <- ggplot(df_plot_fmri_cognition, 
+                  aes(x = iAG_l_hc_BDC_HDT59_z_change_score, 
+                      y = eff_z_NBCK_cognition_slope)) + theme_report_white +
+  geom_smooth(method = lm, se = T, size = 0.5, color = "black") +
+  geom_point(size = 2, color = "deepskyblue1")+
+  labs(y = "Change in FC, HC L Seed", x = "N-Back Eff Slope")
+
+# Add equation
+my.formula <- y ~ x
+p_mri_cognition_iAG_l_hc_BDC_HDT59_z_change_eff_z_BCK_cognition_slope <- p_mri_cognition_iAG_l_hc_BDC_HDT59_z_change_eff_z_BCK_cognition_slope + stat_poly_eq(formula = my.formula, 
+                                    aes(label = paste(..rr.label.., ..p.value.label..,sep = "*\", \"*")), 
+                                    parse = TRUE, color = "white",
+                                    p.digits = 2)  
+
+
+# Plot AGvCTRL_BDC_HDT59_z_change_score, acc_z_MRT_cognition_slope
+p_mri_cognition_AGvCTRL_BDC_HDT59_z_change_score_eff_z_MRT_Acc_slope <- ggplot(df_plot_fmri_cognition, 
+                  aes(x = AGvCTRL_BDC_HDT59_z_change_score, 
+                      y = acc_z_MRT_cognition_slope)) + theme_report_white +
+  geom_smooth(method = lm, se = T, size = 0.5, color = "black") +
+  geom_point(size = 2, color = "deepskyblue1")+
+  labs(y = "Change in FC", x = "MRT Acc Slope")
+
+# Add equation
+my.formula <- y ~ x
+p_mri_cognition_AGvCTRL_BDC_HDT59_z_change_score_eff_z_MRT_Acc_slope <- p_mri_cognition_AGvCTRL_BDC_HDT59_z_change_score_eff_z_MRT_Acc_slope + stat_poly_eq(formula = my.formula, 
+                                    aes(label = paste(..rr.label.., ..p.value.label..,sep = "*\", \"*")), 
+                                    parse = TRUE, color = "white",
+                                    p.digits = 2)  
+
+
+
+p_mri_spacog_2_cAGvCTRL_BDC_HDT59_post_rt_z_gm_post+ theme_report_black
+p_mri_spacog_2_insula_r_hdt_mean_adj_Navstrat_diffpost + theme_report_black
+
+
+p_mri_cognition_iAG_l_hc_BDC_HDT59_z_change_eff_z_BCK_cognition_slope + theme_report_black
+p_mri_cognition_AGvCTRL_BDC_HDT59_z_change_score_eff_z_MRT_Acc_slope + theme_report_black
+
+
+```
+# Correlations Biomarker
+```{r correl bio}
+
+p_mri_bio_precu_right_z_Lure_change_il1b_z_hdt_mean_bdc_adj + theme_report_black
+p_mri_bio_hdt_mean_adj_nfl_hdt_mean_adj + theme_report_black
+
+# MRI vs Bio
+df_corr_mri_bio_df <- func_corr(df_mri_, df_bio_)
+
+df_plot_mri_bio <- merge(df_mri_, df_bio_, by = "id")
+
+dg_right_z_change_score - il1b_z_hdt_mean_bdc_adj : -0.25  
+dg_right_z_change_score - tnfa_z_hdt_mean_bdc_adj : -0.25  
+dg_right_z_change_score - il6_z_hdt_mean_bdc_adj : -0.2
+
+dg_right_z_hdt_mean_bdc_adj - nfl_z_hdt_mean_bdc_adj : -0.522
+
+dg_z_hdt_mean_bdc_adj - nfl_z_hdt_mean_bdc_adj : -0.58
+dg_z_hdt_mean_bdc_adj - bdnf_z_hdt_mean_bdc_adj : 0.3445
+
+dg_z_change_score - nfl_z_hdt_mean_bdc_adj : -0.65
+dg_z_change_score - il1b_z_hdt_mean_bdc_adj : -0.28
+dg_z_change_score - bdnf_z_hdt_mean_bdc_adj : 0.307
+
+# Plot dg_z_hdt_mean_bdc_adj - nfl_z_hdt_mean_bdc_adj : -0.522
+p_mri_bio_hdt_mean_adj_nfl_hdt_mean_adj <- ggplot(df_plot_mri_bio, 
+                  aes(x = dg_z_hdt_mean_bdc_adj, 
+                      y = nfl_z_hdt_mean_bdc_adj)) + theme_report_white +
+  geom_smooth(method = lm, se = T, size = 0.5, color = "black") +
+  geom_point(size = 2, color = "deepskyblue1")+
+  labs(y = "NF-L Mean HDT adj", x = "DG R Mean HDT adj")
+
+# Add equation
+my.formula <- y ~ x
+p_mri_bio_hdt_mean_adj_nfl_hdt_mean_adj <- p_mri_bio_hdt_mean_adj_nfl_hdt_mean_adj + stat_poly_eq(formula = my.formula, 
+                                    aes(label = paste(..rr.label.., ..p.value.label..,sep = "*\", \"*")), 
+                                    parse = TRUE, color = "black",
+                                    p.digits = 2)  
+
+# Plot dg__z_hdt_mean_bdc_adj - bdnf_z_hdt_mean_bdc_adj : -0.522
+p_mri_bio_hdt_mean_adj_bdnf_hdt_mean_adj <- ggplot(df_plot_mri_bio, 
+                  aes(x = dg_z_hdt_mean_bdc_adj, 
+                      y = bdnf_z_hdt_mean_bdc_adj)) + theme_report_white +
+  geom_smooth(method = lm, se = T, size = 0.5, color = "black") +
+  geom_point(size = 2, color = "deepskyblue1")+
+  labs(y = "BDNF Mean HDT adj", x = "DG R Mean HDT adj")
+
+# Add equation
+my.formula <- y ~ x
+p_mri_bio_hdt_mean_adj_bdnf_hdt_mean_adj <- p_mri_bio_hdt_mean_adj_bdnf_hdt_mean_adj + stat_poly_eq(formula = my.formula, 
+                                    aes(label = paste(..rr.label.., ..p.value.label..,sep = "*\", \"*")), 
+                                    parse = TRUE, color = "black",
+                                    p.digits = 2)  
+
+
+
+
+# fMRI vs Bio
+df_corr_fmri_bio_df <- func_corr(df_fmri_, df_bio_)
+
+df_plot_fmri_bio <- merge(df_fmri_, df_bio_, by = "id")
+
+hc_right_z_Lure_change_score, il1b_z_hdt_mean_bdc_adj
+hc_left_z_Lure_change_score
+precu_left_z_Lure_change_score
+precu_right_z_Lure_change_score
+phc_right_z_Lure_change_score
+phc_left_z_Lure_change_score
+
+precu_right_z_Lure_change_score - il1b_z_hdt_mean_bdc_adj, -0.6182285
+precu_left_z_Lure_change_score - il1b_z_hdt_mean_bdc_adj, -0.55
+hc_right_z_Lure_change_score, cort_morn_z_mean_hdt, -0.443988334
+hc_right_z_Lure_change_score, il1b_z_hdt_mean_bdc_adj, -0.362321920
+
+cAGvCTRL_BDC_HDT59_z_change_score - bdnf_z_change_score, -0.5891897
+cAGvCTRL_BDC_HDT59_z_change_score -vegf_z_hdt_mean_bdc_adj, -0.5618826
+cAGvCTRL_BDC_HDT59_z_change_score, il6_z_mean_hdt, 0.6856730
+AGvCTRL_BDC_HDT59_z_change_score - il6_z_mean_hdt, 0.56
+
+iAG_l_hc_BDC_HDT59_z_change_score - il6_z_mean_hdt, 0.50
+cAGvCTRL_BDC_HDT59_z_change_score - nfl_z_hdt_mean_bdc_adj, 0.49
+
+hc_right_z_Repetition_change_score- bdnf_z_mean_hdt, 0.45
+phc_right_z_Repetition_change_score - igf_z_change_score, 0.475463107
+
+hc_right_z_Repetition_change_score- bdnf_z_mean_hdt, 0.45
+phc_right_z_Repetition_change_score - bdnf_z_mean_hdt, 0.45
+precu_right_z_Repetition_change_score- bdnf_z_mean_hdt, 0.42
+
+
+cAGvCTRL_BDC_HDT59_z_change_score -vegf_z_hdt_mean_bdc_adj, -0.5618826
+cAGvCTRL_BDC_HDT59_z_change_score, il6_z_mean_hdt
+iAG_l_hc_BDC_HDT59_z_change_score, igf_z_hdt_mean_bdc_adj
+
+precu_left_z_Repetition_post - bdnf_z_mean_hdt, 0.4433112
+
+
+precu_left_z_Lure_change_score - bdnf_z_mean_hdt, 0.3822729
+
+iAG_l_hc_BDC_HDT59_z_change_score - cort_morn_z_mean_hdt 0.4473370
+
+
+
+# Plot dg__z_hdt_mean_bdc_adj - bdnf_z_hdt_mean_bdc_adj : -0.522
+p_mri_bio_precu_right_z_Lure_change_il1b_z_hdt_mean_bdc_adj <- ggplot(df_plot_fmri_bio, 
+                  aes(x = precu_right_z_Lure_change_score, 
+                      y = il1b_z_hdt_mean_bdc_adj)) + theme_report_white +
+  geom_smooth(method = lm, se = T, size = 0.5, color = "black") +
+  geom_point(size = 2, color = "deepskyblue1")+
+  labs(y = "Il-1b Mean HDT adj", x = "Change in BOLD signal Precuneus R Lure")
+
+# Add equation
+my.formula <- y ~ x
+p_mri_bio_precu_right_z_Lure_change_il1b_z_hdt_mean_bdc_adj <- p_mri_bio_precu_right_z_Lure_change_il1b_z_hdt_mean_bdc_adj + stat_poly_eq(formula = my.formula, 
+                                    aes(label = paste(..rr.label.., ..p.value.label..,sep = "*\", \"*")), 
+                                    parse = TRUE, color = "black",
+                                    p.digits = 2)  
+
+
+
+
+
+
+library(corrplot)
+
+M <- cor(df_corr[-c(1)])
+x <- corrplot(M, method="number")
+
+
+df_corr %>% 
+  #select(Species, Sepal.Length, Sepal.Width, Petal.Width) %>% 
+  #group_by(rides) %>% 
+  correlation()
+
+names(df_corr)
+
+
+
+
+datatable(cor_results_df, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T))
+
+
+
+cor_results_mri_bio_df <- cor_results_df
+
+library(ggpmisc) # for adding equation to graph
+
+# Plot dg vs nfl
+df_dg_nfl <- cor_results_mri_bio_df[, c("id", "dg_z_change_score", "nfl_z_hdt_mean_bdc_adj")]
+df_dg_nfl <- merge(df_demo[c(1,3,4)], df_dg_nfl, by = "id")
+
+p.dg_nf <- ggplot(df_dg_nfl, aes(x = dg_z_change_score, y = nfl_z_hdt_mean_bdc_adj)) + theme_report_white +
+  geom_smooth(method = lm, se = T, size = 0.5, color = "black") +
+  geom_point(size = 2, color = "deepskyblue1")+
+  labs(y = "Change in DG", x = "Mean NF-L HDT")
+    #annotate(geom="text", x=50, y=0.055, label="R2 = 0.17, p = 0.13", color="white")+
+    #scale_y_continuous(breaks=seq(0.03,0.06,0.01), limits = c(0.027,0.06), expand = c(0,0))+
+    #scale_x_continuous(breaks=seq(0,200,50), limits = c(-20,210), expand = c(0,0))+
+   #theme(axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)))+
+  #theme(axis.title.x = element_text(vjust=-0.8))
+
+
+p.dg_nf2 <- ggplot(df_dg_nfl, aes(x = dg_z_change_score, y = nfl_z_hdt_mean_bdc_adj), color = group_3, fill = group_3) + theme_report_white +
+  geom_smooth(method = lm, se = T, size = 0.5, color = "black") +
+  geom_point(aes(colour = group_3), size = 2) +
+  labs(y = "Change in DG", x = "Mean NF-L HDT")
+
+df_corr_mri_df_spacog_1_df
+
+function_scatter_plot <- function (data, x_var1) {ggplot(data, aes(x = x_var1, y = y_var1), color = group_3, fill = group_3) + theme_report_white +
+  geom_smooth(method = lm, se = T, size = 0.5, color = "black") +
+  geom_point(aes(colour = deepskyblue1), size = 2)
+}
+x_var1 <- "insula_left_z_change_score"
+y_var1 <- "acc_z_sut_change_score"
+function_scatter_plot(df_corr_mri_df_spacog_1_df, insula_left_z_change_score, acc_z_sut_change_score)
+
+# Add equation
+my.formula <- y ~ x
+p.dg_nf <- p.dg_nf +
+                                    stat_poly_eq(formula = my.formula, 
+                                    aes(label = paste(..rr.label.., ..p.value.label..,sep = "*\", \"*")), 
+                                    parse = TRUE, color = "black",
+                                    p.digits = 2)  
+
+lm_dg_nf <- summary(lm(dg_z_change_score~nfl_z_hdt_mean_bdc_adj, df_dg_nfl))
+lm_dg_nf              
+
+# save plot as pdf
+pdf("./Figures/Correlational Analyses/p.dg_nf.pdf", width=12/2.54, height=9/2.54,useDingbats=FALSE) #in cm
+print(p.dg_nf)
+dev.off()
+```
+# Definition of Helper Functions 
+## Descriptive Functions
+```{r functions for descriptive stats}
+# Function to check data completion 
+func_data_completion <- function(data, ...) {
+  
+  if(!"time.f" %in% names(data)) {
+    data$time.f <- as.factor( c( rep(1, nrow(data) ) ) )
+    }
+  
+  if(!"cond.f" %in% names(data)) {
+    data$cond.f <- as.factor( c( rep(1, nrow(data) ) ) )
+    }
+  
+  data <- reshape2::melt( data, 
+                              id.vars = names( Filter(is.factor, data) )
+                              )  %>%
+  
+  group_by(variable) %>%
+  dplyr::summarise(
+      N = 24 * length( levels(time.f) ) * length( levels(cond.f) ),
+      n = sum( !is.na(value) ),
+      Percent = n / N * 100
+      )
+}
+
+# Function to compute descriptives
+func_desc <- function(data, ...) {
+  df_tmp <- df_demo[ , !names(df_demo) %in% c("age","height", "weight")]
+  data <- merge(df_tmp, data, by = "id") #add demo
+  data <- reshape2::melt( data, 
+                              id.vars = names( Filter(is.factor, data) )
+                              )
+  groups <- enquos(...)
+  
+  result <- data %>%
+    
+    group_by(!!!groups) %>%
+    
+    dplyr::summarise(
+      MEAN = mean(value, na.rm = T),
+      SE = sd(value, na.rm = T) / sqrt(length(value) )
+      )
+  return(result)
+}
+```
+## Plot Functions
+```{r functions for plots}
+# Wrapper function for line plots, forwards to func_plot_line_facet
+func_plot_line <- function(x) {ggplot(x, tmpaes_plot) + 
+    theme_report_white +
+    geom_line(position = pd) +
+    geom_errorbar(tmpaes_errorbar,
+                  width =.4, 
+                  position = pd) +
+    geom_point(position = pd,
+               shape = 21,
+               size = 2) + #shape = 21, size = 1, fill = "white"
+    scale_y_continuous(expand = c(0,0)) +
+    labs(y = "", x = "Time", size = 10) +
+    theme(legend.title = element_blank(),
+          legend.text = element_text(size = 8),
+          axis.title.x = element_text(size = 10))
+  }
+
+# Function for line plots, takes 'desc' as input
+func_plot_line_facet <- function(x) {func_plot_line(x) +
+    facet_grid_def +
+    theme(strip.placement = "outside",
+          strip.background = element_rect(color = "transparent",
+                                          fill = "transparent", size = 1.5,
+                                          linetype = "solid"),
+          strip.text = element_text(size = 10,
+                                    color = "black",
+                                    face = "bold"),
+          panel.spacing.y = unit(2, "lines"))
+}
+
+# Function for bar plots, forwards to func_plot_bar_facet
+func_plot_bar <- function(x) {ggplot(x, tmpaes_plot) + theme_report_white +
+    geom_hline(yintercept = 0,
+               size = 0.3,
+               linetype = "solid") +
+    geom_errorbar(tmpaes_errorbar,
+                 width = .4,
+                  position = pd,
+                  color = "black") +
+    geom_bar(tmpaes_geombar, # separate by category
+             stat = "identity", 
+             position = pd,
+             width = 1.0,
+             color = "black") + # make it side-by-side
+    scale_y_continuous(expand = c(0,0)) +
+    labs(y = "", x = "", size = 10) +
+    guides(x = "none") +
+    theme(legend.title = element_blank(),
+          legend.text = element_text(size=8),
+          axis.title.x = element_text(size = 10),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank())
+}
+
+# Function for bar plots, takes 'desc*' as input
+func_plot_bar_facet <- function(x) {func_plot_bar(x) +
+    facet_grid_def +
+    theme(strip.placement = "outside",
+          strip.background = element_rect(color = "transparent",
+                                          fill = "transparent", size = 1.5,
+                                          linetype = "solid"),
+          strip.text = element_text(size = 10,
+                                    color = "black",
+                                    face = "bold"),
+          panel.spacing.y = unit(2, "lines"))
+}
+
+# Function for bar plots, forwards to func_plot_bar_facet
+func_plot_bar_singlevar <- function(x) {ggplot(x, tmpaes_plot) + theme_report_white +
+    geom_hline(yintercept = 0,
+               size = 0.3,
+               linetype = "solid") +
+    geom_errorbar(tmpaes_errorbar,
+                  width = .3,
+                  size = 0.3,
+                  position = pd,
+                  color = "black") +
+    geom_bar(tmpaes_geombar, # separate by category
+             stat = "identity", 
+             position = pd,
+             width = 1.0,
+             size = 0.3,
+             color = "black") + # make it side-by-side
+    scale_y_continuous(expand = c(0,0)) +
+    #labs(y = "", x = "", size = 10) +
+    #guides(x = "none") +
+    theme(legend.title = element_blank(),
+          legend.text = element_text(size = 8),
+          axis.title.x = element_text(size = 10),
+          axis.title.y = element_text(size = 10))
+          #axis.text.x = element_blank(),
+          #axis.ticks.x = element_blank())
+}
+```
+## Functions for Mixed Models
+```{r functions for mixed models}
+# Wrapper for appending bdc data as covariate
+func_bdc_cov <- function(data, ...) {
+  
+  df_tmp <- subset(data, time.f != bdc)
+  
+  df_tmp_pre <- subset(data, time.f == bdc) %>%
+    rename_at(vars(contains("_z")), ~ str_c("pre_", .)) %>%
+    select("id" | where(is.numeric) )
+  
+  df_tmp <- merge(df_tmp_pre, df_tmp, by = "id")
+  droplevels(df_tmp)
+  
+  df_tmp <- merge(df_demo, df_tmp,by  = c("id")) 
+}
+
+# Wrapper for mixed models, takes 'dvList', requires 'model_mm', e.g., model_mm <- paste0(" + sex"," + age", " + time.f",  " * group_3", " * cond.f", " + (1|id)" )
+func_mm_fac_with_bdc_adj_help <- function(dvList) {
+  map(dvList, function(i) {
+    lmerTest::lmer(paste0(i, " ~ pre_", i, model_mm),
+                   REML = T,
+                   data = df_tmp)
+   }) %>% setNames(dvList) #add dvList names
+}
+
+# Function for creating mixed model tables, takes 'dvList'
+func_tbl_aov <- function(x) {
+  tbl_mm_fac_aov <- list_df2df(tbl_mm_fac_aov)
+  names(tbl_mm_fac_aov)[4] <- "df1"
+  names(tbl_mm_fac_aov)[5] <- "df2"
+  names(tbl_mm_fac_aov)[6] <- "F"
+  names(tbl_mm_fac_aov)[7] <- "P"
+  tbl_mm_fac_aov[c(5:6)] <- round(tbl_mm_fac_aov[c(5:6)], digits = 2) # Round
+  tbl_mm_fac_aov[c(7)] <- round(tbl_mm_fac_aov[c(7)], digits = 3) # Round
+  return(tbl_mm_fac_aov)
+}
+
+# Function emmeans, takes 'dvList'; requires to define 'model', e.g., model <- c(~ time.f * group_3 * cond.f); also requires 'func_mm_fac_with_bdc_adj_help'
+func_emm_fac_with_bdc_adj <- function(x) {
+  mm_fac <- func_mm_fac_with_bdc_adj_help(dvList)
+  emm_fac <- lapply(mm_fac, function(mm_fac) emmeans::emmeans(mm_fac, model_emmeans, lmer.df = "satterthwaite"))
+  emm_fac_ <- lapply(emm_fac, data.frame)
+  table_emm_fac_df <- ldply(emm_fac_, data.frame) #create df
+  table_emm_fac_df_raw <- table_emm_fac_df
+  table_emm_fac_df_raw$.id <- as.factor(as.character(table_emm_fac_df_raw$.id ))
+  rm(emm_fac_)
+  return(table_emm_fac_df_raw)
+}
+
+# Helper function contrasts emmeans, takes 'dvList'; also requires 'func_mm_fac_with_bdc_adj_help'
+func_contrasts_emm_fac_with_bdc_adj <- function(x) {
+  mm_fac <- func_mm_fac_with_bdc_adj_help(dvList)
+  emm_fac <- lapply(mm_fac, function(mm_fac) emmeans::emmeans(mm_fac, model_emmeans, lmer.df = "satterthwaite"))
+  contrasts_mm_fac <- lapply(emm_fac, function(emm_fac) contrast(emm_fac, contrast_type,
+                                                                         by = factors,
+                                                                         lmer.df = "satterthwaite",
+                                                                         adjust = "none"))
+  contrasts_mm_fac <- lapply(contrasts_mm_fac, summary, infer=T) #add adj confidence intervals (adjusted if adjustment method is selected: https://cran.r-project.org/web/packages/emmeans/vignettes/confidence-intervals.html)
+  contrasts_mm_fac_ <- lapply(contrasts_mm_fac, data.frame) #create df
+  contrasts_mm_fac_df <- ldply(contrasts_mm_fac_, data.frame) #create df
+  rm(contrasts_mm_fac_)
+  return(contrasts_mm_fac_df)
+}
+
+# Function for creating table of contrasts emmeans, takes 'dvList', and requires 'func_contrasts_emm_fac_with_bdc_adj'
+func_tbl_contr_emm_fac_with_bdc_adj <- function(dvList) {
+  tmp <- func_contrasts_emm_fac_with_bdc_adj(dvList)
+  tmp[ncol(tmp)] <- round(tmp[ncol(tmp)], digits = 3) #round
+  tmp[ncol(tmp)-1] <- round(tmp[ncol(tmp)-1], digits = 2) #round
+  tmp[ncol(tmp)-2] <- round(tmp[ncol(tmp)-2], digits = 2) #round
+  tmp[ncol(tmp)-3] <- round(tmp[ncol(tmp)-3], digits = 2) #round
+  tmp[ncol(tmp)-4] <- round(tmp[ncol(tmp)-4], digits = 1) #round
+  tmp[ncol(tmp)-5] <- round(tmp[ncol(tmp)-5], digits = 2) #round
+  tmp[ncol(tmp)-6] <- round(tmp[ncol(tmp)-6], digits = 2) #round
+  tmp$CI <- paste0("(",tmp$lower.CL,"," ,tmp$upper.CL,")")
+  tmp$CI <- gsub( ",", ", ", tmp$CI ) 
+  tmp$CI <- paste0(tmp$estimate," " ,tmp$CI)
+  tmp <- tmp[-c(ncol(tmp)-3,
+                ncol(tmp)-4,
+                ncol(tmp)-6,
+                ncol(tmp)-7)]
+  colnames(tmp)[ncol(tmp)] <- "Mean (95%CI)"
+  colnames(tmp)[ncol(tmp)-1] <- "P (unadjusted)"
+  colnames(tmp)[ncol(tmp)-2] <- "t"
+  colnames(tmp)[2] <- "Contrast"
+  return(tmp)
+}
+
+# Function for creating table of contrasts emmeans with fdr correction, takes 'dvList', and requires 'func_contrasts_emm_fac_with_bdc_adj_fdr'
+func_contrasts_emm_fac_with_bdc_adj_fdr <- function(x) {
+  mm_fac <- func_mm_fac_with_bdc_adj_help(dvList)
+  emm_fac <- lapply(mm_fac, function(mm_fac) emmeans::emmeans(mm_fac, model_emmeans, lmer.df = "satterthwaite"))
+  contrasts_mm_fac <- lapply(emm_fac, function(emm_fac) contrast(emm_fac, contrast_type,
+                                                                         by = factors,
+                                                                         lmer.df = "satterthwaite",
+                                                                         adjust = "fdr"))
+  contrasts_mm_fac <- lapply(contrasts_mm_fac, summary, infer=T) #add adj confidence intervals (adjusted if adjustment method is selected: https://cran.r-project.org/web/packages/emmeans/vignettes/confidence-intervals.html)
+  contrasts_mm_fac_ <- lapply(contrasts_mm_fac, data.frame) #create df
+  contrasts_mm_fac_df <- ldply(contrasts_mm_fac_, data.frame) #create df
+  rm(contrasts_mm_fac_)
+  return(contrasts_mm_fac_df)
+}
+
+func_tbl_contr_emm_fac_with_bdc_adj_fdr <- function(dvList) {
+  tmp <- func_contrasts_emm_fac_with_bdc_adj_fdr(dvList)
+  tmp[ncol(tmp)] <- round(tmp[ncol(tmp)], digits = 3) #round
+  tmp[ncol(tmp)-1] <- round(tmp[ncol(tmp)-1], digits = 2) #round
+  tmp[ncol(tmp)-2] <- round(tmp[ncol(tmp)-2], digits = 2) #round
+  tmp[ncol(tmp)-3] <- round(tmp[ncol(tmp)-3], digits = 2) #round
+  tmp[ncol(tmp)-4] <- round(tmp[ncol(tmp)-4], digits = 1) #round
+  tmp[ncol(tmp)-5] <- round(tmp[ncol(tmp)-5], digits = 2) #round
+  tmp[ncol(tmp)-6] <- round(tmp[ncol(tmp)-6], digits = 2) #round
+  tmp$CI <- paste0("(",tmp$lower.CL,"," ,tmp$upper.CL,")")
+  tmp$CI <- gsub( ",", ", ", tmp$CI ) 
+  tmp$CI <- paste0(tmp$estimate," " ,tmp$CI)
+  tmp <- tmp[-c(ncol(tmp)-3,
+                ncol(tmp)-4,
+                ncol(tmp)-6,
+                ncol(tmp)-7)]
+  colnames(tmp)[ncol(tmp)] <- "Mean (95%CI)"
+  colnames(tmp)[ncol(tmp)-1] <- "P (FDR Adjusted)"
+  colnames(tmp)[ncol(tmp)-2] <- "t"
+  colnames(tmp)[2] <- "Contrast"
+  return(tmp)
+}
+```
+# Data Completion Check
+```{r descriptive summaries for completed (missing) data}
+# vbm
+missing_vbm <- func_data_completion(df_vbm)
+
+# hc
+missing_hc <- func_data_completion(df_hc)
+
+# mtr
+missing_mtr <- func_data_completion(df_mtr)
+
+# lc
+missing_lc <- func_data_completion(df_lc)
+
+# rsfmri
+missing_rsfrmi <- func_data_completion(df_rsfrmi_AGvCTRL_BDC_HDT59)
+
+# rsfmri
+missing_taskfmri <- func_data_completion(df_patsep)
+
+# Combine summary
+mri_summary <- bind_rows(missing_vbm[1,], 
+                              missing_hc[1,], 
+                              missing_mtr[1,], 
+                              missing_lc[1,],
+                              missing_rsfrmi[1,],
+                              missing_taskfmri[1,]) 
+
+mri_summary$Sequence <- c("Whole-brain VBM", 
+                           "High Res Hippocampus",
+                           "Magnerization Transfer Ratio",
+                           "High Res Locus Coeruleus",
+                          "Resting State fMRI",
+                          "Task fMRI Pattern Separation")
+
+mri_summary <- mri_summary[c(5,2:4)]
+colnames(mri_summary)[2] <- "Expected (N)"
+colnames(mri_summary)[3] <- "Completed (N)"
+colnames(mri_summary)[4] <- "Completed (%)"
+mri_summary <- as.data.frame(mri_summary)
+```
+#### Table 1. Data collection summary MRI.
+```{r echo = FALSE}
+datatable(mri_summary) %>%
+    formatRound(columns=c("Completed (%)"), digits = 1)
+
+round(mean(mri_summary$'Completed (%)'), 1)
+```
+# Task fmri Pattern Separation
+## Plot Time Course adjusted for Baseline 
+```{r plot time course adjusted for baseline task fmri patsep}
+# Plot arithmetic means
+# define dep vars
+dvList <- colnames(df_patsep)[c(4:ncol(df_patsep))]
+
+# Compute desc
+desc <- func_desc(df_patsep, group_3, time.f, cond.f, variable)
+
+# Plot desc 
+# New facet label names for variable
+new_labels <- c("HC L","HC R",
+                "PHG L","PHG R",
+                "Precuneus L","Precuneus R")
+
+names(new_labels) <- c("hc_left_z", "hc_right_z",
+                       "phc_left_z", "phc_right_z",
+                       "precu_left_z", "precu_right_z")
+                       
+new_labels2 <- c("Lure", "Repetition")
+names(new_labels2) <- c("Lure", "Repetition")
+
+# Define aes for func_plot
+tmpaes_plot <- aes(x = time.f, y = MEAN,
+                   group = group_3,
+                   fill = group_3,
+                   color = group_3)
+
+tmpaes_errorbar <- aes(x = time.f,
+                    ymin = MEAN-SE, 
+                    ymax = MEAN+SE)
+
+# Define labels for func_plot_line_facet
+labeller_def <- labeller(variable = new_labels,
+                         cond.f = new_labels2)
+
+facet_grid_def <- facet_wrap(variable ~ cond.f,
+                             ncol = 2,
+                             labeller = labeller_def)
+
+# Draw plot
+pd <- position_dodge(0.3)
+p.patsep_desc <- func_plot_line_facet(desc %>%
+                                     mutate(time.f = fct_relevel(time.f, "BDC-3", "HDT59"),
+                                            variable = fct_relevel(variable, "hc_left_z", "hc_right_z", "phc_left_z", "phc_right_z", "precu_left_z", "precu_right_z"),
+                                            group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
+
+# Add zero line
+p.patsep_desc <- p.patsep_desc + geom_hline(yintercept = 0, size = 0.3, linetype = "dotted")
+
+# Adjust legend size
+p.patsep_desc <- p.patsep_desc + theme(legend.key.size = unit(0.3, "cm"))
+p.patsep_desc
+```
+
+## Mixed Model Time x Group Interaction 
+```{r mixed model for time x group task fmri patsep}
+# select data
+df_tmp <- df_patsep
+
+# Add baseline as cov
+bdc <- "BDC-3"
+df_tmp <-  func_bdc_cov(df_tmp)
+
+# Select dep vars
+dvList <- colnames(df_tmp)[c(17:ncol(df_tmp))] 
+
+# Define model
+model_mm <- paste0(" + sex"," + age", " + group_3", " * cond.f", "+ (1|id)" )
+
+# Run mixed models
+tbl_mm_fac_aov <- sapply(func_mm_fac_with_bdc_adj_help(dvList), anova, simplify = FALSE, USE.NAMES = TRUE) 
+
+# ANOVA table 
+tbl_mm_fac_aov_df <- func_tbl_aov(dvList)
+
+# Helper functions for parameter definition in mixed model tables, takes 'dvList'
+Parameter_func <- function(dvList){
+  rep(c(
+  "Baseline",
+  "Sex",
+  "Age",
+  "Group",
+  "Condition",
+  "Group x Condition"),
+                 length(dvList))
+}
+
+# Add variables
+Parameter <- Parameter_func(dvList)
+blanks <- rep("", length(Parameter) / length(dvList) - 1)
+Variable <- c("HC L", blanks, "HC R", blanks,
+                "PHG L", blanks, "PHG R", blanks,
+                "Precuneus L", blanks, "Precuneus R", blanks)
+tbl_mm_fac_aov_df_patsep <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
+```
+#### Table 2. Mixed Model Summary for Pattern Separation
+```{r echo = FALSE}
+# Print table
+datatable(tbl_mm_fac_aov_df_patsep, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P"), digits = 3) %>%
+  formatRound(columns = c("df2", "F"), digits = 1)
+```
+## Contrasts for Comparing Groups at Each Time Point During Bed Rest
+```{r contrasts for groups by group and condition rsfrmi patsep}
+# Contrasts
+# Define model for contrasts
+model_emmeans <- ~ cond.f * group_3
+
+# Define contrasts
+contrast_type <- "pairwise"
+factors <- c("cond.f")
+
+# Run contrasts
+tbl_contr_emm_fac_df <- func_tbl_contr_emm_fac_with_bdc_adj_fdr(dvList)
+
+# Create vars to make nice table
+tmp_n_dvs <- length(levels(tbl_contr_emm_fac_df$Contrast)) * 
+  length(levels(tbl_contr_emm_fac_df$cond.f)) -1
+tmp_n_cond <- length(levels(tbl_contr_emm_fac_df$Contrast)) - 1
+
+
+tbl_contr_emm_fac_df$Variable <- c("HC L", rep("", tmp_n_dvs), "HC R", rep("", tmp_n_dvs), 
+                "PHG L", rep("", tmp_n_dvs), "PHG R", rep("", tmp_n_dvs), 
+                "Precuneus L", rep("", tmp_n_dvs), "Precuneus R", rep("", tmp_n_dvs))
+
+tbl_contr_emm_fac_df$Condtition <- rep ( c(
+                                     "Lure", rep("", tmp_n_cond),
+                                     "Repetition", rep("", tmp_n_cond)),
+                                   length(dvList) )
+
+#table_contrasts_emm_fac_by_time_df$Contrast <- rep(c("cAG vs. CTRL","iAG vs. CTRL", "cAG vs. iAG"), length(dvList))
+
+# Ttble for contrasts
+tbl_contr_emm_fac_df_patsep <- tbl_contr_emm_fac_df[c(8:9, 2, 7, 4:6)]
+```
+#### Table 3. Mixed Model Group Contrasts for task fMRI Pattern Separation
+```{r echo = FALSE}
+# Print table 
+datatable(tbl_contr_emm_fac_df_patsep, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P (FDR Adjusted)"), digits = 3) %>%
+  formatRound(columns = c("df", "t"), digits = 1)
+```
+## Plot Estimated Marignal Means To Show Time Course for Each Group
+```{r plot emmeans for groups by time rsfmri patsep}
+# Define model for emmeans
+model_emmeans <- ~ cond.f * group_3
+
+# Run emmeans
+emm_fac <- func_emm_fac_with_bdc_adj(dvList) 
+
+# Plot emmeans 
+# New facet label names for variable
+new_labels <- c("HC L","HC R",
+                "PHG L","PHG R",
+                "Precuneus L","Precuneus R")
+
+names(new_labels) <- c("hc_left_z", "hc_right_z",
+                       "phc_left_z", "phc_right_z",
+                       "precu_left_z", "precu_right_z")
+                       
+new_labels2 <- c("Lure", "Repetition")
+names(new_labels2) <- c("Lure", "Repetition")
+
+
+# Define aes for func_plot
+tmpaes_plot <- aes(x = group_3,
+                   y = emmean,
+                   group = group_3,
+                   fill = group_3,
+                   color = group_3)
+
+tmpaes_errorbar <- aes(x = group_3,
+                    ymin = emmean-SE, 
+                    ymax = emmean+SE)
+
+tmpaes_geombar <- aes(x = group_3,
+                    y = emmean, 
+                    fill=group_3)
+
+# Define labels for func_plot_line_facet
+labeller_def <- labeller(.id = new_labels,
+                         cond.f = new_labels2)
+
+facet_grid_def <- facet_wrap(.id ~ cond.f,
+                             labeller = labeller_def,
+                             ncol = 2)
+
+# Function for plot
+func_plot_bar_2 <- function(x) {ggplot(x, tmpaes_plot) + theme_report_white +
+    geom_hline(yintercept = 0,
+               size = 0.3,
+               linetype = "solid") +
+    geom_errorbar(tmpaes_errorbar,
+                 width = .4,
+                  position = pd,
+                  color = "black") +
+    geom_bar(tmpaes_geombar, # separate by category
+             stat = "identity", 
+             position = pd,
+             width = 1.0,
+             color = "black") + # make it side-by-side
+    scale_y_continuous(expand = c(0,0)) +
+    labs(y = "", x = "", size = 10) +
+    #guides(x = "none") +
+    theme(legend.title = element_blank(),
+          legend.text = element_text(size=8),
+          axis.title.x = element_text(size = 10),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank())
+}
+
+func_plot_bar_facet_2 <- function(x) {func_plot_bar_2(x) +
+    facet_grid_def +
+    theme(strip.placement = "outside",
+          strip.background = element_rect(color = "transparent",
+                                          fill = "transparent", size = 1.5,
+                                          linetype = "solid"),
+          strip.text = element_text(size = 10,
+                                    color = "black",
+                                    face = "bold"),
+          panel.spacing.y = unit(2, "lines"))
+}
+
+
+# Draw plot
+pd <- position_dodge(0.99)
+p.patsep_emmeans <- func_plot_bar_facet_2(emm_fac %>%
+                                     mutate(
+                                       cond.f = fct_relevel(cond.f, "Repetition", "Lure"),
+                                       .id = fct_relevel(.id, "hc_left_z", "hc_right_z", "phc_left_z", "phc_right_z", "precu_left_z", "precu_right_z"),
+                                       group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")
+                                       )
+                                     )
+
+# Add zero line
+#p.patsep_emmeans <- p.patsep_emmeans + geom_hline(yintercept = 0, size = 0.3, linetype = "dotted")
+
+# Adjust legend size
+p.patsep_emmeans <- p.patsep_emmeans + theme(legend.key.size = unit(0.3, "cm"))
+```
+## Create Combined plot 
+```{r plot combined rsfmri patsep}
+# Combine plot 
+p.patsep_comb <- plot_grid(p.patsep_desc, p.patsep_emmeans + rremove("x.text") +
+                          theme(legend.key.size = unit(0.3, "cm")),
+                        labels = c("a", "b"),
+                        ncol = 2, nrow = 1,
+                        rel_widths = c(1.5, 1.5))
+
+# Adjust legend size
+p.patsep_comb <- p.patsep_comb + theme(legend.key.size = unit(0.3, "cm"))
+
+# Save plot as pdf
+pdf("./Figures/MRI/p.patsep_comb.pdf",
+    width = 20/2.54, 
+    height = 10/2.54,
+    useDingbats = FALSE) #in cm
+print(p.patsep_comb)
+dev.off()
+```
+#### Figure 1. Pattern Separation: (a) Time course of brain activation in response to pattern separation before, during, and after bed rest. (b) Main effect of bed rest on brain activation during pattern separation on HDT59. Data are means and SD adjusted for baseline.
+```{r, echo = FALSE, fig.width = 8, fig.height = 16, fig.cap = ""}
+print(p.patsep_comb)
+```
+
+# rsfmri
+## Merge rsfmri data
+```{r merge rsfmri}
+# Select data
+df_rsfrmi_AGvCTRL_BDC_HDT59_tmp <- df_rsfrmi_AGvCTRL_BDC_HDT59[c(1,2,5)]
+df_rsfrmi_AGvCTRL_BDC_HDT59_tmp$variable <- rep( "AGvCTRL_BDC_HDT59_z", nrow(df_rsfrmi_AGvCTRL_BDC_HDT59_tmp) )
+colnames(df_rsfrmi_AGvCTRL_BDC_HDT59_tmp)[3] <- "value"
+
+
+df_rsfrmi_cAGvsCTRL_BDC_HDT59_tmp <- df_rsfrmi_cAGvsCTRL_BDC_HDT59[c(1,2,5)]
+df_rsfrmi_cAGvsCTRL_BDC_HDT59_tmp$variable <- rep( "cAGvCTRL_BDC_HDT59_z", nrow(df_rsfrmi_cAGvsCTRL_BDC_HDT59_tmp) )
+colnames(df_rsfrmi_cAGvsCTRL_BDC_HDT59_tmp)[3] <- "value"
+
+df_rsfrmi_l_iAG_hc_bdc_hdt59_tmp <- df_rsfrmi_l_iAG_hc_bdc_hdt59[c(1,2,3)]
+df_rsfrmi_l_iAG_hc_bdc_hdt59_tmp$variable <- rep( "iAG_l_hc_BDC_HDT59_z", nrow(df_rsfrmi_l_iAG_hc_bdc_hdt59_tmp) )
+colnames(df_rsfrmi_l_iAG_hc_bdc_hdt59_tmp)[3] <- "value"
+
+df_rsfrmi <- rbind(df_rsfrmi_AGvCTRL_BDC_HDT59_tmp, df_rsfrmi_cAGvsCTRL_BDC_HDT59_tmp, df_rsfrmi_l_iAG_hc_bdc_hdt59_tmp)
+
+df_rsfrmi <- dcast(df_rsfrmi, id + time.f ~ variable, value.var = "value")
+```
+## Plot Time Course adjusted for Baseline 
+```{r plot time course adjusted for baseline rsfmri}
+# Plot arithmetic means
+# Compute desc
+dvList <- colnames(df_rsfrmi)[c(3:ncol(df_rsfrmi))]
+
+desc <- func_desc(df_rsfrmi, group_3, time.f, variable)
+
+# Plot desc 
+# New facet label names for variable
+
+new_labels <- c("ICA - AG vs CTRL","ICA - cAG vs CTRL", "Seed Analysis HC left- iAG vs CTRL")
+names(new_labels) <- c("AGvCTRL_BDC_HDT59_z", "cAGvCTRL_BDC_HDT59_z", "iAG_l_hc_BDC_HDT59_z")
+                      
+
+# Define aes for func_plot
+tmpaes_plot <- aes(x = time.f, y = MEAN,
+                   group = group_3,
+                   fill = group_3,
+                   color = group_3)
+
+tmpaes_errorbar <- aes(x = time.f,
+                    ymin = MEAN-SE, 
+                    ymax = MEAN+SE)
+
+# Define labels for func_plot_line_facet
+labeller_def <- labeller(variable = new_labels)
+
+facet_grid_def <- facet_wrap(.~ variable,
+                             switch = "y",
+                             labeller = labeller_def,
+                             ncol = 3)
+                             
+
+# Draw plot
+pd <- position_dodge(0.3)
+p.rsfmri_desc <- func_plot_line_facet(desc %>%
+                                     mutate(time.f = fct_relevel(time.f, "BDC-3", "HDT59"),
+                                            variable = fct_relevel(variable, "AGvCTRL_BDC_HDT59_z", "cAGvCTRL_BDC_HDT59_z", "iAG_l_hc_BDC_HDT59_z"),
+                                            group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
+
+# Add zero line
+p.rsfmri_desc <- p.rsfmri_desc + geom_hline(yintercept = 0, size = 0.3, linetype = "dotted")
+
+# Adjust legend size
+p.rsfmri_desc <- p.rsfmri_desc + theme(legend.key.size = unit(0.3, "cm"))
+p.rsfmri_desc
+```
+
+
+
+
+# VBM
+## Plot Time Course adjusted for Baseline 
+```{r plot time course adjusted for baseline vbm}
+# Plot arithmetic means
+# Compute desc
+desc <- func_desc(df_vbm, group_3, time.f, variable)
+
+# Plot desc 
+# New facet label names for variable
+new_labels <- c("Insula L","Insula R")
+names(new_labels) <- c("insula_left_z","insula_right_z") 
+
+# Define aes for func_plot
+tmpaes_plot <- aes(x = time.f, y = MEAN,
+                   group = group_3,
+                   fill = group_3,
+                   color = group_3)
+
+tmpaes_errorbar <- aes(x = time.f,
+                    ymin = MEAN-SE, 
+                    ymax = MEAN+SE)
+
+# Define labels for func_plot_line_facet
+labeller_def <- labeller(variable = new_labels)
+
+facet_grid_def <- facet_grid(variable ~.,
+                             switch = "y",
+                             labeller = labeller_def) 
+
+# Draw plot
+pd <- position_dodge(0.3)
+p.vbm_desc <- func_plot_line_facet(desc %>%
+                                     mutate(time.f = fct_relevel(time.f, "BDC-3", "HDT30", "HDT59", "R+11"),
+                                            variable = fct_relevel(variable, "insula_left_z","insula_right_z"),
+                                            group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
+
+# Add zero line
+p.vbm_desc <- p.vbm_desc + geom_hline(yintercept = 0, size = 0.3, linetype = "dotted")
+
+# Adjust legend size
+p.vbm_desc <- p.vbm_desc + theme(legend.key.size = unit(0.3, "cm"))
+```
+
+## Mixed Model Time x Group Interaction 
+```{r mixed model for time x group vbm}
+# Add baseline as cov
+bdc <- "BDC-3"
+df_tmp <-  func_bdc_cov(df_vbm)
+
+# Select dep vars
+dvList <- c("insula_left_z","insula_right_z") 
+
+# Define model
+model_mm <- paste0(" + sex"," + age", " + time.f",  " * group_3", " + (1|id)" )
+
+# Run mixed models
+tbl_mm_fac_aov <- sapply(func_mm_fac_with_bdc_adj_help(dvList), anova, simplify = FALSE, USE.NAMES = TRUE) 
+
+# ANOVA table 
+tbl_mm_fac_aov_df <- func_tbl_aov(dvList)
+
+# Helper functions for parameter definition in mixed model tables, takes 'dvList'
+Parameter_func <- function(dvList){
+  rep(c(
+  "Baseline",
+  "Sex",
+  "Age",
+  "Time",
+  "Group",
+  "Time x Group"),
+                 length(dvList))
+}
+
+# Add variables
+Parameter <- Parameter_func(dvList)
+blanks <- rep("", length(Parameter) / length(dvList) - 1)
+Variable <- c("Insula L", blanks,"Insula R", blanks)
+tbl_mm_fac_aov_df_vbm <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
+```
+#### Table 2. Mixed Model Summary for VBM.
+```{r echo = FALSE}
+# Print table
+datatable(tbl_mm_fac_aov_df_vbm, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P"), digits = 3) %>%
+  formatRound(columns = c("df2", "F"), digits = 1)
+```
+## Contrasts for Comparing Groups at Each Time Point During Bed Rest
+```{r contrasts for groups by time vbm}
+# Contrasts
+# Define model for contrasts
+model_emmeans <- ~ time.f * group_3
+
+# Define contrasts
+contrast_type <- "pairwise"
+factors <- c("time.f")
+
+# Run contrasts
+tbl_contr_emm_fac_df <- func_tbl_contr_emm_fac_with_bdc_adj(dvList)
+
+# Create vars to make nice table
+tmp_n_dvs <- length(levels(tbl_contr_emm_fac_df$Contrast)) * 
+  length(levels(tbl_contr_emm_fac_df$time.f)) -1
+tmp_n_time <- length(levels(tbl_contr_emm_fac_df$Contrast)) - 1
+
+
+tbl_contr_emm_fac_df$Variable <- c("Insula L", rep("", tmp_n_dvs),
+                                   "Insula R", rep("", tmp_n_dvs))
+
+tbl_contr_emm_fac_df$Time <- rep ( c(
+                                     "HDT30", rep("", tmp_n_time),
+                                     "HDT59", rep("", tmp_n_time),
+                                     "R+11", rep("", tmp_n_time)),
+                                   length(dvList) )
+
+#table_contrasts_emm_fac_by_time_df$Contrast <- rep(c("cAG vs. CTRL","iAG vs. CTRL", "cAG vs. iAG"), length(dvList))
+
+# Ttble for contrasts
+tbl_contr_emm_fac_df_vbm <- tbl_contr_emm_fac_df[c(8:9, 2, 7, 4:6)]
+```
+#### Table 3. Mixed Model Group Contrasts for VBM.
+```{r echo = FALSE}
+# Print table 
+datatable(tbl_contr_emm_fac_df_vbm, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
+  formatRound(columns = c("df", "t"), digits = 1)
+```
+## Plot Estimated Marignal Means To Show Time Course for Each Group
+```{r plot emmeans for groups by time vbm}
+# Define model for emmeans
+model_emmeans <- ~ time.f * group_3
+
+# Run emmeans
+emm_fac <- func_emm_fac_with_bdc_adj(dvList) 
+
+# Plot emmeans 
+# New facet label names for variable
+new_labels <- c("Insula L","Insula R")
+names(new_labels) <- c("insula_left_z","insula_right_z") 
+
+# Define aes for func_plot
+tmpaes_plot <- aes(x = time.f, y = emmean,
+                   group = group_3,
+                   fill = group_3,
+                   color = group_3)
+
+tmpaes_errorbar <- aes(x = time.f,
+                    ymin = emmean-SE, 
+                    ymax = emmean+SE)
+
+# Define labels for func_plot_line_facet
+labeller_def <- labeller(.id = new_labels)
+
+facet_grid_def <- facet_grid(.id ~ .,
+                             switch = "y",
+                             labeller = labeller_def) 
+
+# Draw plot
+pd <- position_dodge(0.3)
+p.vbm_emmeans <- func_plot_line_facet(emm_fac %>%
+                                        mutate(time.f = fct_relevel(time.f, "HDT30", "HDT59", "R+11"),
+                                               .id = fct_relevel(.id, "insula_left_z","insula_right_z"),
+                                               group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
+
+# Add zero line
+p.vbm_emmeans <- p.vbm_emmeans + geom_hline(yintercept = 0, size = 0.3, linetype = "dotted")
+
+# Adjust legend size
+p.vbm_emmeans <- p.vbm_emmeans + theme(legend.key.size = unit(0.3, "cm"))
+```
+## Mixed Model for Main Effect of Bed Rest (excluding BDC)
+```{r mixed model for main effect group vbm}
+# Drop recovery
+df_tmp <- subset(df_tmp, time.f !="R+11") # Drop baseline
+df_tmp <- droplevels(df_tmp)
+
+# Select dep vars
+dvList <- c("insula_left_z","insula_right_z") 
+
+# Define model
+model_mm <- paste0(" + sex"," + age", " + group_3", " + (1|id)" )
+
+# Run mixed models
+tbl_mm_fac_aov <- sapply(func_mm_fac_with_bdc_adj_help(dvList), anova, simplify = FALSE, USE.NAMES = TRUE) 
+
+# ANOVA table
+tbl_mm_fac_aov_df <- func_tbl_aov(dvList)
+
+# Helper functions for parameter definition in mixed model tables, takes 'dvList'
+Parameter_func <- function(dvList){
+  rep(c(
+  "Baseline",
+  "Sex",
+  "Age",
+  "Group"),
+                 length(dvList))
+}
+
+# Add variables
+Parameter <- Parameter_func(dvList)
+blanks <- rep("", length(Parameter) / length(dvList) - 1)
+Variable <- c("Insula L", blanks,"Insula R", blanks)
+tbl_mm_fac_aov_df_vbm_main <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
+```
+#### Table 4. Mixed Model Summary testing the Main Effect of Group for VBM.
+```{r echo = FALSE}
+# Print table
+datatable(tbl_mm_fac_aov_df_vbm_main, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P"), digits = 3) %>%
+  formatRound(columns = c("df2", "F"), digits = 1)
+```
+
+## Contrasts for Comparing Groups
+```{r contrasts for groups vbm}
+# Define model for emmeans
+model_emmeans <- ~ group_3
+
+# Run emmeans
+emm_fac <- func_emm_fac_with_bdc_adj(dvList)
+
+# Contrasts
+# Define model for contrasts
+model_emmeans <- ~ group_3
+
+# Define contrasts
+contrast_type <- "pairwise"
+factors <- c()
+
+# Run contrasts
+tbl_contr_emm_fac_df <- func_tbl_contr_emm_fac_with_bdc_adj(dvList)
+
+tbl_contr_emm_fac_df$Variable <- c("Insula L", rep("", 2),
+                                   "Insula R", rep("", 2))
+
+#table_contrasts_emm_fac_by_time_df$Contrast <- rep(c("cAG vs. CTRL","iAG vs. CTRL", "cAG vs. iAG"), length(dvList))
+
+# Table for contrasts
+tbl_contr_emm_fac_vbm_main <- tbl_contr_emm_fac_df[c(7, 2, 6, 3:5)]
+```
+#### Table 5. Mixed Model Contrasts Comparing Groups for VBM.
+```{r echo = FALSE}
+# Print table
+datatable(tbl_contr_emm_fac_vbm_main, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
+  formatRound(columns = c("df", "t"), digits = 1)
+```
+
+## Plot Estimated Marignal Means for Comparing Groups
+```{r plot groups vbm}
+# New facet label names for variable
+new_labels <- c("Insula L","Insula R")
+names(new_labels) <- c("insula_left_z","insula_right_z") 
+
+# Define aes for func_plot
+tmpaes_plot <- aes(x = contrast,
+                   y = emmean,
+                   group = group_3,
+                   fill = group_3,
+                   color = group_3)
+
+tmpaes_errorbar <- aes(x = group_3,
+                    ymin = emmean-SE, 
+                    ymax = emmean+SE)
+
+tmpaes_geombar <- aes(x = group_3,
+                    y = emmean, 
+                    fill=group_3)
+
+# Define labels for func_plot_line_facet
+labeller_def <- labeller(.id = new_labels)
+
+facet_grid_def <- facet_grid(.id ~ .,
+                             switch = "y",
+                             scales = "free",
+                             labeller = labeller_def) 
+
+# Draw Plot 
+pd <- position_dodge(0.99)
+p.vbm_emmeans_main <- func_plot_bar_facet(emm_fac %>%
+                                            mutate(
+                                                   .id = fct_relevel(.id, "insula_left_z","insula_right_z"),
+                                                   group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG"))) 
+# Adjust legend size
+p.vbm_emmeans_main <- p.vbm_emmeans_main + theme(legend.key.size = unit(0.3, "cm"))
+```
+## Create Combined plot 
+```{r plot combined vbm}
+# Combine plot 
+p.vbm_comb <- plot_grid(p.vbm_desc, p.vbm_emmeans_main + rremove("x.text") +
+                          theme(legend.key.size = unit(0.3, "cm")),
+                        labels = c("a", "b"),
+                        ncol = 2, nrow = 1,
+                        rel_widths = c(2.2, 0.8))
+
+# Adjust legend size
+p.vbm_comb <- p.vbm_comb + theme(legend.key.size = unit(0.3, "cm"))
+
+# Save plot as pdf
+pdf("./Figures/MRI/p.vbm_comb.pdf",
+    width = 20/2.54, 
+    height = 10/2.54,
+    useDingbats = FALSE) #in cm
+print(p.vbm_comb)
+dev.off()
+```
+#### Figure 1. VBM: (a) Time course of VBM before, during, and after bed rest. (b) Main effect of bed rest. Data are means and SD adjusted for baseline.
+```{r, echo = FALSE, fig.width = 8, fig.height = 8, fig.cap = ""}
+print(p.vbm_comb)
+```
+# High Res LC
+## Plot Time Course adjusted for Baseline 
+```{r plot time course adjusted for baseline lc}
+# Plot arithmetic means
+# Compute desc
+desc <- func_desc(df_lc, group_3, time.f, variable)
+
+# Plot desc 
+# New facet label names for variable
+new_labels <- c("Locus Coeruleus")
+names(new_labels) <- c("lc_fse_z") 
+
+# Define aes for func_plot
+tmpaes_plot <- aes(x = time.f, y = MEAN,
+                   group = group_3,
+                   fill = group_3,
+                   color = group_3)
+
+tmpaes_errorbar <- aes(x = time.f,
+                    ymin = MEAN-SE, 
+                    ymax = MEAN+SE)
+
+# Define labels for func_plot_line_facet
+labeller_def <- labeller(variable = new_labels)
+
+facet_grid_def <- facet_grid(variable ~.,
+                             switch = "y",
+                             labeller = labeller_def) 
+
+# Draw plot
+pd <- position_dodge(0.3)
+p.lc_desc <- func_plot_line_facet(desc %>%
+                                     mutate(time.f = fct_relevel(time.f, "BDC-3", "HDT30", "HDT59", "R+11"),
+                                            variable = fct_relevel(variable, "lc_fse_z"),
+                                            group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
+
+# Add zero line
+p.lc_desc <- p.lc_desc + geom_hline(yintercept = 0, size = 0.3, linetype = "dotted")
+
+# Adjust legend size
+p.lc_desc <- p.lc_desc + theme(legend.key.size = unit(0.3, "cm"))
+```
+
+## Mixed Model Time x Group Interaction 
+```{r mixed model for time x group lc}
+# Add baseline as cov
+bdc <- "BDC-3"
+df_tmp <-  func_bdc_cov(df_lc)
+
+# Select dep vars
+dvList <- c("lc_fse_z") 
+
+# Define model
+model_mm <- paste0(" + sex"," + age", " + time.f",  " * group_3", " + (1|id)" )
+
+# Run mixed models
+tbl_mm_fac_aov <- sapply(func_mm_fac_with_bdc_adj_help(dvList), anova, simplify = FALSE, USE.NAMES = TRUE) 
+
+# ANOVA table 
+tbl_mm_fac_aov_df <- func_tbl_aov(dvList)
+
+# Helper functions for parameter definition in mixed model tables, takes 'dvList'
+Parameter_func <- function(dvList){
+  rep(c(
+  "Baseline",
+  "Sex",
+  "Age",
+  "Time",
+  "Group",
+  "Time x Group"),
+                 length(dvList))
+}
+
+# Add variables
+Parameter <- Parameter_func(dvList)
+blanks <- rep("", length(Parameter) / length(dvList) - 1)
+Variable <- c("Locus Coeruleus", blanks)
+tbl_mm_fac_aov_df_lc <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
+```
+#### Table 6. Mixed Model Summary for LC
+```{r echo = FALSE}
+# Print table
+datatable(tbl_mm_fac_aov_df_lc, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P"), digits = 3) %>%
+  formatRound(columns = c("df2", "F"), digits = 1)
+```
+## Contrasts for Comparing Groups at Each Time Point During Bed Rest
+```{r contrasts for groups by time lc}
+# Contrasts
+# Define model for contrasts
+model_emmeans <- ~ time.f * group_3
+
+# Define contrasts
+contrast_type <- "pairwise"
+factors <- c("time.f")
+
+# Run contrasts
+tbl_contr_emm_fac_df <- func_tbl_contr_emm_fac_with_bdc_adj(dvList)
+
+# Create vars to make nice table
+tmp_n_dvs <- length(levels(tbl_contr_emm_fac_df$Contrast)) * 
+  length(levels(tbl_contr_emm_fac_df$time.f)) -1
+tmp_n_time <- length(levels(tbl_contr_emm_fac_df$Contrast)) - 1
+
+
+tbl_contr_emm_fac_df$Variable <- c("Locus Coeruleus", rep("", tmp_n_dvs))
+
+tbl_contr_emm_fac_df$Time <- rep ( c(
+                                     "HDT30", rep("", tmp_n_time),
+                                     "HDT59", rep("", tmp_n_time),
+                                     "R+11", rep("", tmp_n_time)),
+                                   length(dvList) )
+
+#table_contrasts_emm_fac_by_time_df$Contrast <- rep(c("cAG vs. CTRL","iAG vs. CTRL", "cAG vs. iAG"), length(dvList))
+
+# Ttble for contrasts
+tbl_contr_emm_fac_df_lc <- tbl_contr_emm_fac_df[c(8:9, 2, 7, 4:6)]
+```
+#### Table 7. Mixed Model Group Contrasts for LC.
+```{r echo = FALSE}
+# Print table 
+datatable(tbl_contr_emm_fac_df_lc, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
+  formatRound(columns = c("df", "t"), digits = 1)
+```
+## Plot Estimated Marignal Means To Show Time Course for Each Group
+```{r plot emmeans for groups by time lc}
+# Define model for emmeans
+model_emmeans <- ~ time.f * group_3
+
+# Run emmeans
+emm_fac <- func_emm_fac_with_bdc_adj(dvList) 
+
+# Plot emmeans 
+# New facet label names for variable
+new_labels <- c("Locus Coeruleus")
+names(new_labels) <- c("lc_fse_z") 
+
+# Define aes for func_plot
+tmpaes_plot <- aes(x = time.f, y = emmean,
+                   group = group_3,
+                   fill = group_3,
+                   color = group_3)
+
+tmpaes_errorbar <- aes(x = time.f,
+                    ymin = emmean-SE, 
+                    ymax = emmean+SE)
+
+# Define labels for func_plot_line_facet
+labeller_def <- labeller(.id = new_labels)
+
+facet_grid_def <- facet_grid(.id ~ .,
+                             switch = "y",
+                             labeller = labeller_def) 
+
+# Draw plot
+pd <- position_dodge(0.3)
+p.lc_emmeans <- func_plot_line_facet(emm_fac %>%
+                                        mutate(time.f = fct_relevel(time.f, "HDT30", "HDT59", "R+11"),
+                                               .id = fct_relevel(.id, "lc_fse_z"),
+                                               group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
+
+# Add zero line
+p.lc_emmeans <- p.lc_emmeans + geom_hline(yintercept = 0, size = 0.3, linetype = "dotted")
+
+# Adjust legend size
+p.lc_emmeans <- p.lc_emmeans + theme(legend.key.size = unit(0.3, "cm"))
+```
+## Mixed Model for Main Effect of Bed Rest (excluding BDC)
+```{r mixed model for main effect group lc}
+# Drop recovery
+df_tmp <- subset(df_tmp, time.f !="R+11") # Drop baseline
+df_tmp <- droplevels(df_tmp)
+
+# Select dep vars
+dvList <- c("lc_fse_z")
+
+# Define model
+model_mm <- paste0(" + sex"," + age", " + group_3", " + (1|id)" )
+
+# Run mixed models
+tbl_mm_fac_aov <- sapply(func_mm_fac_with_bdc_adj_help(dvList), anova, simplify = FALSE, USE.NAMES = TRUE) 
+
+# ANOVA table
+tbl_mm_fac_aov_df <- func_tbl_aov(dvList)
+
+# Helper functions for parameter definition in mixed model tables, takes 'dvList'
+Parameter_func <- function(dvList){
+  rep(c(
+  "Baseline",
+  "Sex",
+  "Age",
+  "Group"),
+                 length(dvList))
+}
+
+# Add variables
+Parameter <- Parameter_func(dvList)
+blanks <- rep("", length(Parameter) / length(dvList) - 1)
+Variable <- c("Locus Coeruleus", blanks)
+tbl_mm_fac_aov_df_lc_main <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
+```
+#### Table 8. Mixed Model Summary testing the Main Effect of Group for LC.
+```{r echo = FALSE}
+# Print table
+datatable(tbl_mm_fac_aov_df_lc_main, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P"), digits = 3) %>%
+  formatRound(columns = c("df2", "F"), digits = 1)
+```
+
+## Contrasts for Comparing Groups
+```{r contrasts for groups lc}
+
+mm_fac <- func_mm_fac_with_bdc_adj_help(dvList)
+
+# Define model for emmeans
+model_emmeans <- ~ group_3
+
+# Run emmeans
+emm_fac <- func_emm_fac_with_bdc_adj(dvList)
+
+# Contrasts
+# Define model for contrasts
+model_emmeans <- ~ group_3
+
+# Define contrasts
+contrast_type <- "pairwise"
+factors <- c()
+
+# Run contrasts
+tbl_contr_emm_fac_df <- func_tbl_contr_emm_fac_with_bdc_adj(dvList)
+
+
+tbl_contr_emm_fac_df$Variable <- c("Locus Coeruleus", rep("", 2))
+
+#table_contrasts_emm_fac_by_time_df$Contrast <- rep(c("cAG vs. CTRL","iAG vs. CTRL", "cAG vs. iAG"), length(dvList))
+
+# Table for contrasts
+tbl_contr_emm_fac_lc_main <- tbl_contr_emm_fac_df[c(7, 2, 6, 3:5)]
+```
+#### Table 9. Mixed Model Contrasts Comparing Groups for LC
+```{r echo = FALSE}
+# Print table
+datatable(tbl_contr_emm_fac_lc_main, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
+  formatRound(columns = c("df", "t"), digits = 1)
+```
+
+## Plot Estimated Marignal Means for Comparing Groups
+```{r plot groups lc}
+# New facet label names for variable
+new_labels <- c("Locus Coeruleus")
+names(new_labels) <- c("lc_fse_z") 
+
+# Define aes for func_plot
+tmpaes_plot <- aes(x = contrast,
+                   y = emmean,
+                   group = group_3,
+                   fill = group_3,
+                   color = group_3)
+
+tmpaes_errorbar <- aes(x = group_3,
+                    ymin = emmean-SE, 
+                    ymax = emmean+SE)
+
+tmpaes_geombar <- aes(x = group_3,
+                    y = emmean, 
+                    fill=group_3)
+
+# Define labels for func_plot_line_facet
+labeller_def <- labeller(.id = new_labels)
+
+facet_grid_def <- facet_grid(.id ~ .,
+                             switch = "y",
+                             scales = "free",
+                             labeller = labeller_def) 
+
+# Draw Plot 
+pd <- position_dodge(0.99)
+p.lc_emmeans_main <- func_plot_bar_facet(emm_fac %>%
+                                            mutate(
+                                                   .id = fct_relevel(.id, "insula_left_z","insula_right_z"),
+                                                   group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG"))) 
+# Adjust legend size
+p.lc_emmeans_main <- p.lc_emmeans_main + theme(legend.key.size = unit(0.3, "cm"))
+```
+## Create Combined plot 
+```{r plot combined lc}
+# Combine plot 
+p.lc_comb <- plot_grid(p.lc_desc, p.lc_emmeans_main + rremove("x.text") +
+                          theme(legend.key.size = unit(0.3, "cm")),
+                        labels = c("a", "b"),
+                        ncol = 2, nrow = 1,
+                        rel_widths = c(2.2, 0.8))
+
+# Adjust legend size
+p.lc_comb <- p.lc_comb + theme(legend.key.size = unit(0.3, "cm"))
+
+# Save plot as pdf
+pdf("./Figures/MRI/p.lc_comb.pdf",
+    width = 20/2.54, 
+    height = 10/2.54,
+    useDingbats = FALSE) #in cm
+print(p.lc_comb)
+dev.off()
+```
+#### Figure 2. LC: (a) Time course of LC before, during, and after bed rest. (b) Main effect of bed rest. Data are means and SD adjusted for baseline.
+```{r, echo = FALSE, fig.width = 7, fig.height = 4, fig.cap = ""}
+print(p.lc_comb)
+```
+
+# High Res HC
+## Plot Time Course adjusted for Baseline 
+```{r plot time course adjusted for baseline hc}
+# Plot arithmetic means
+# Compute desc
+dvList <- colnames(df_hc)[c(3:ncol(df_hc))]
+
+desc <- func_desc( subset(df_hc, select = -c(hc_total_z, misc_left_z, misc_right_z, misc_z) ), group_3, time.f, variable)
+
+# Plot desc 
+# New facet label names for variable
+
+new_labels <- c("BA35 L","BA35 R", "BA35",
+                "BA36 L","BA36 R", "BA36",
+                "CA1 L","CA1 R", "CA1",
+                "CA2 L","CA2 R", "CA2",
+                "CA3 L","CA3 R", "CA3",
+                "DG L","DG R", "DG",
+                "ERC L","ERC R", "ERC",
+                "SULCUS L", "SULCUS R", "SULCUS",
+                "SUB L", "SUB R", "SUB",
+                "PHC L", "PHC R", "PHC")
+
+                #"HC Total")
+
+names(new_labels) <- c("ba35_left_z", "ba35_right_z", "ba35_z", 
+                       "ba36_left_z", "ba36_right_z", "ba36_z", 
+                       "ca1_left_z", "ca1_right_z", "ca1_z", 
+                       "ca2_left_z", "ca2_right_z", "ca2_z",
+                       "ca3_left_z", "ca3_right_z", "ca3_z",
+                       "dg_left_z", "dg_right_z", "dg_z",
+                       "erc_left_z", "erc_right_z", "erc_z",
+                       "sulcus_left_z", "sulcus_right_z", "sulcus_z",
+                       "sub_left_z",  "sub_right_z", "sub_z",
+                       "phc_left_z",  "phc_right_z", "phc_z")
+                       
+                        #"hc_total_z")
+
+# Define aes for func_plot
+tmpaes_plot <- aes(x = time.f, y = MEAN,
+                   group = group_3,
+                   fill = group_3,
+                   color = group_3)
+
+tmpaes_errorbar <- aes(x = time.f,
+                    ymin = MEAN-SE, 
+                    ymax = MEAN+SE)
+
+# Define labels for func_plot_line_facet
+labeller_def <- labeller(variable = new_labels)
+
+facet_grid_def <- facet_wrap(.~ variable,
+                             switch = "y",
+                             labeller = labeller_def,
+                             ncol = 3)
+                             
+
+# Draw plot
+pd <- position_dodge(0.3)
+p.hc_desc <- func_plot_line_facet(desc %>%
+                                     mutate(time.f = fct_relevel(time.f, "BDC-3", "HDT30", "HDT59", "R+11"),
+                                            variable = fct_relevel(variable, "ba35_left_z", "ba35_right_z", "ba35_z", 
+                       "ba36_left_z", "ba36_right_z", "ba36_z", 
+                       "ca1_left_z", "ca1_right_z", "ca1_z", 
+                       "ca2_left_z", "ca2_right_z", "ca2_z",
+                       "ca3_left_z", "ca3_right_z", "ca3_z",
+                       "dg_left_z", "dg_right_z", "dg_z",
+                       "erc_left_z", "erc_right_z", "erc_z",
+                       "sulcus_left_z", "sulcus_right_z", "sulcus_z",
+                       "sub_left_z",  "sub_right_z", "sub_z",
+                       "phc_left_z",  "phc_right_z", "phc_z"), #"hc_total_z"),
+                                            group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
+
+# Add zero line
+p.hc_desc <- p.hc_desc + geom_hline(yintercept = 0, size = 0.3, linetype = "dotted")
+
+# Adjust legend size
+p.hc_desc <- p.hc_desc + theme(legend.key.size = unit(0.3, "cm"))
+p.hc_desc
+```
+## Mixed Model Time x Group Interaction 
+```{r mixed model for time x group hc}
+
+##### ANALYSES BY SIDE NOT DONE ####
+# create df with side as variable
+df_tmp <- df_hc %>% select( contains("left") | contains("right") | "id" | "time.f")
+
+df_tmp <- melt(df_tmp, id.vars = c("id", "time.f") )
+
+df_tmp$side <-str_replace(df_tmp$variable, pattern = ".*_([^-]*)_.*", replacement = "\\1")
+
+df_tmp$variable <- gsub( "_.*$", "", df_tmp$variable )
+
+df_tmp$variable <- paste(df_tmp$variable, "z", sep = "_")
+
+df_tmp <- as_tibble(df_tmp)
+
+df_tmp[c(1:3,5)] <- lapply(df_tmp[c(1:3,5)], as.factor)
+
+df_tmp <- dcast(df_tmp, id + time.f + side ~ variable, value.var = "value" )
+#########
+
+# select data
+df_tmp <- subset( df_hc, select = -c(hc_total_z, misc_left_z, misc_right_z, misc_z) )
+#df_tmp <- subset( df_tmp, time.f != "R+11")     
+
+#df_tmp <- df_hc %>% select( contains("left") | contains("right") | "id" | "time.f")
+
+# Add baseline as cov
+bdc <- "BDC-3"
+df_tmp <-  func_bdc_cov(df_tmp)
+
+# Select dep vars
+dvList <- colnames(df_tmp)[c(40:ncol(df_tmp))] 
+
+# Define model
+model_mm <- paste0(" + sex"," + age", " + time.f", " * group_3", "+ (1|id)" )
+
+# Run mixed models
+tbl_mm_fac_aov <- sapply(func_mm_fac_with_bdc_adj_help(dvList), anova, simplify = FALSE, USE.NAMES = TRUE) 
+
+# ANOVA table 
+tbl_mm_fac_aov_df <- func_tbl_aov(dvList)
+
+# Helper functions for parameter definition in mixed model tables, takes 'dvList'
+Parameter_func <- function(dvList){
+  rep(c(
+  "Baseline",
+  "Sex",
+  "Age",
+  "Time",
+  "Group",
+  "Time x Group"),
+                 length(dvList))
+}
+
+# Add variables
+Parameter <- Parameter_func(dvList)
+blanks <- rep("", length(Parameter) / length(dvList) - 1)
+Variable <- c("BA35 L", blanks, "BA35 R", blanks, "BA35", blanks, 
+                "BA36 L", blanks, "BA36 R", blanks, "BA36", blanks, 
+                "CA1 L", blanks, "CA1 R", blanks, "CA1", blanks, 
+                "CA2 L", blanks, "CA2 R", blanks, "CA2", blanks, 
+                "CA3 L", blanks, "CA3 R", blanks, "CA3", blanks, 
+                "DG L", blanks, "DG R", blanks, "DG", blanks, 
+                "ERC L", blanks, "ERC R", blanks, "ERC", blanks, 
+                "SULCUS L", blanks, "SULCUS R", blanks, "SULCUS", blanks, 
+                "SUB L", blanks, "SUB R", blanks, "SUB", blanks, 
+                "PHC L", blanks, "PHC R", blanks, "PHC", blanks )
+tbl_mm_fac_aov_df_hc <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
+```
+#### Table 2. Mixed Model Summary for HC
+```{r echo = FALSE}
+# Print table
+datatable(tbl_mm_fac_aov_df_hc, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P"), digits = 3) %>%
+  formatRound(columns = c("df2", "F"), digits = 1)
+```
+## Contrasts for Comparing Groups at Each Time Point During Bed Rest
+```{r contrasts for groups by time hc}
+# Contrasts
+# Define model for contrasts
+model_emmeans <- ~ time.f * group_3
+
+# Define contrasts
+contrast_type <- "pairwise"
+factors <- c("time.f")
+
+# Run contrasts
+tbl_contr_emm_fac_df <- func_tbl_contr_emm_fac_with_bdc_adj(dvList)
+
+# Create vars to make nice table
+tmp_n_dvs <- length(levels(tbl_contr_emm_fac_df$Contrast)) * 
+  length(levels(tbl_contr_emm_fac_df$time.f)) -1
+tmp_n_time <- length(levels(tbl_contr_emm_fac_df$Contrast)) - 1
+
+
+tbl_contr_emm_fac_df$Variable <- c("BA35 L", rep("", tmp_n_dvs), "BA35 R", rep("", tmp_n_dvs), "BA35", rep("", tmp_n_dvs),
+                "BA36 L", rep("", tmp_n_dvs), "BA36 R", rep("", tmp_n_dvs), "BA36", rep("", tmp_n_dvs),
+                "CA1 L", rep("", tmp_n_dvs), "CA1 R", rep("", tmp_n_dvs), "CA1", rep("", tmp_n_dvs),
+                "CA2 L",rep("", tmp_n_dvs), "CA2 R", rep("", tmp_n_dvs), "CA2", rep("", tmp_n_dvs),
+                "CA3 L", rep("", tmp_n_dvs), "CA3 R", rep("", tmp_n_dvs), "CA3", rep("", tmp_n_dvs),
+                "DG L", rep("", tmp_n_dvs), "DG R", rep("", tmp_n_dvs), "DG", rep("", tmp_n_dvs),
+                "ERC L", rep("", tmp_n_dvs), "ERC R", rep("", tmp_n_dvs), "ERC", rep("", tmp_n_dvs),
+                "SULCUS L", rep("", tmp_n_dvs), "SULCUS R", rep("", tmp_n_dvs), "SULCUS", rep("", tmp_n_dvs),
+                "SUB L", rep("", tmp_n_dvs), "SUB R", rep("", tmp_n_dvs), "SUB", rep("", tmp_n_dvs),
+                "PHC L", rep("", tmp_n_dvs), "PHC R", rep("", tmp_n_dvs), "PHC", rep("", tmp_n_dvs))
+
+tbl_contr_emm_fac_df$Time <- rep ( c(
+                                     "HDT30", rep("", tmp_n_time),
+                                     "HDT59", rep("", tmp_n_time),
+                                     "R+11", rep("", tmp_n_time)),
+                                   length(dvList) )
+
+#table_contrasts_emm_fac_by_time_df$Contrast <- rep(c("cAG vs. CTRL","iAG vs. CTRL", "cAG vs. iAG"), length(dvList))
+
+# Ttble for contrasts
+tbl_contr_emm_fac_df_hc <- tbl_contr_emm_fac_df[c(8:9, 2, 7, 4:6)]
+```
+#### Table 3. Mixed Model Group Contrasts for HC
+```{r echo = FALSE}
+# Print table 
+datatable(tbl_contr_emm_fac_df_hc, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
+  formatRound(columns = c("df", "t"), digits = 1)
+```
+## Plot Estimated Marignal Means To Show Time Course for Each Group
+```{r plot emmeans for groups by time hc}
+# Define model for emmeans
+model_emmeans <- ~ time.f * group_3
+
+# Run emmeans
+emm_fac <- func_emm_fac_with_bdc_adj(dvList) 
+
+# Plot emmeans 
+# New facet label names for variable
+new_labels <- c("BA35 L","BA35 R", "BA35",
+                "BA36 L","BA36 R", "BA36",
+                "CA1 L","CA1 R", "CA1",
+                "CA2 L","CA2 R", "CA2",
+                "CA3 L","CA3 R", "CA3",
+                "DG L","DG R", "DG",
+                "ERC L","ERC R", "ERC",
+                "SULCUS L", "SULCUS R", "SULCUS",
+                "SUB L", "SUB R", "SUB",
+                "PHC L", "PHC R", "PHC")
+
+                #"HC Total")
+
+names(new_labels) <- c("ba35_left_z", "ba35_right_z", "ba35_z", 
+                       "ba36_left_z", "ba36_right_z", "ba36_z", 
+                       "ca1_left_z", "ca1_right_z", "ca1_z", 
+                       "ca2_left_z", "ca2_right_z", "ca2_z",
+                       "ca3_left_z", "ca3_right_z", "ca3_z",
+                       "dg_left_z", "dg_right_z", "dg_z",
+                       "erc_left_z", "erc_right_z", "erc_z",
+                       "sulcus_left_z", "sulcus_right_z", "sulcus_z",
+                       "sub_left_z",  "sub_right_z", "sub_z",
+                       "phc_left_z",  "phc_right_z", "phc_z")
+
+# Define aes for func_plot
+tmpaes_plot <- aes(x = time.f, y = emmean,
+                   group = group_3,
+                   fill = group_3,
+                   color = group_3)
+
+tmpaes_errorbar <- aes(x = time.f,
+                    ymin = emmean-SE, 
+                    ymax = emmean+SE)
+
+# Define labels for func_plot_line_facet
+labeller_def <- labeller(.id = new_labels)
+
+facet_grid_def <- facet_wrap(. ~ .id,
+                             switch = "y",
+                             labeller = labeller_def,
+                             ncol = 3,
+                             scales = "free") 
+
+# Draw plot
+pd <- position_dodge(0.3)
+p.hc_emmeans <- func_plot_line_facet(emm_fac %>%
+                                     mutate(time.f = fct_relevel(time.f, "HDT30", "HDT59", "R+11"),
+                                            variable = fct_relevel(.id, "ba35_left_z", "ba35_right_z", "ba35_z", 
+                       "ba36_left_z", "ba36_right_z", "ba36_z", 
+                       "ca1_left_z", "ca1_right_z", "ca1_z", 
+                       "ca2_left_z", "ca2_right_z", "ca2_z",
+                       "ca3_left_z", "ca3_right_z", "ca3_z",
+                       "dg_left_z", "dg_right_z", "dg_z",
+                       "erc_left_z", "erc_right_z", "erc_z",
+                       "sulcus_left_z", "sulcus_right_z", "sulcus_z",
+                       "sub_left_z",  "sub_right_z", "sub_z",
+                       "phc_left_z",  "phc_right_z", "phc_z"), #"hc_total_z"),
+                                            group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")))
+
+# Add zero line
+p.hc_emmeans <- p.hc_emmeans + geom_hline(yintercept = 0, size = 0.3, linetype = "dotted")
+
+# Adjust legend size
+p.hc_emmeans <- p.hc_emmeans + theme(legend.key.size = unit(0.3, "cm"))
+```
+## Mixed Model for Main Effect of Bed Rest (excluding BDC)
+```{r mixed model for main effect group hc}
+# Drop recovery
+df_tmp <- subset(df_tmp, time.f !="R+11") # Drop baseline
+df_tmp <- droplevels(df_tmp)
+
+# Select dep vars
+dvList <- colnames(df_tmp)[c(40:ncol(df_tmp))]
+
+# Define model
+model_mm <- paste0(" + sex"," + age", " + group_3", " + (1|id)" )
+
+# Run mixed models
+tbl_mm_fac_aov <- sapply(func_mm_fac_with_bdc_adj_help(dvList), anova, simplify = FALSE, USE.NAMES = TRUE) 
+
+# ANOVA table
+tbl_mm_fac_aov_df <- func_tbl_aov(dvList)
+
+# Helper functions for parameter definition in mixed model tables, takes 'dvList'
+Parameter_func <- function(dvList){
+  rep(c(
+  "Baseline",
+  "Sex",
+  "Age",
+  "Group"),
+                 length(dvList))
+}
+
+# Add variables
+Parameter <- Parameter_func(dvList)
+blanks <- rep("", length(Parameter) / length(dvList) - 1)
+Variable <- c("BA35 L", blanks, "BA35 R", blanks, "BA35", blanks, 
+                "BA36 L", blanks, "BA36 R", blanks, "BA36", blanks, 
+                "CA1 L", blanks, "CA1 R", blanks, "CA1", blanks, 
+                "CA2 L", blanks, "CA2 R", blanks, "CA2", blanks, 
+                "CA3 L", blanks, "CA3 R", blanks, "CA3", blanks, 
+                "DG L", blanks, "DG R", blanks, "DG", blanks, 
+                "ERC L", blanks, "ERC R", blanks, "ERC", blanks, 
+                "SULCUS L", blanks, "SULCUS R", blanks, "SULCUS", blanks, 
+                "SUB L", blanks, "SUB R", blanks, "SUB", blanks, 
+                "PHC L", blanks, "PHC R", blanks, "PHC", blanks )
+tbl_mm_fac_aov_df_hc_main <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
+```
+#### Table 4. Mixed Model Summary testing the Main Effect of Group for HC
+```{r echo = FALSE}
+# Print table
+datatable(tbl_mm_fac_aov_df_hc_main, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P"), digits = 3) %>%
+  formatRound(columns = c("df2", "F"), digits = 1)
+```
+## Contrasts for Comparing Groups
+```{r contrasts for groups hc}
+# Define model for emmeans
+model_emmeans <- ~ group_3
+
+# Run emmeans
+emm_fac <- func_emm_fac_with_bdc_adj(dvList)
+
+# Contrasts
+# Define model for contrasts
+model_emmeans <- ~ group_3
+
+# Define contrasts
+contrast_type <- "pairwise"
+factors <- c()
+
+# Run contrasts
+tbl_contr_emm_fac_df <- func_tbl_contr_emm_fac_with_bdc_adj(dvList)
+
+# Create vars to make nice table
+tmp_n_dvs <- length(levels(tbl_contr_emm_fac_df$Contrast)) * 
+  length(levels(tbl_contr_emm_fac_df$.id)) -1
+tmp_n_time <- length(levels(tbl_contr_emm_fac_df$Contrast)) - 1
+
+
+tbl_contr_emm_fac_df$Variable <- c("BA35 L", rep("", 2), "BA35 R", rep("", 2), "BA35", rep("", 2),
+                "BA36 L", rep("", 2), "BA36 R", rep("", 2), "BA36", rep("", 2),
+                "CA1 L", rep("", 2), "CA1 R", rep("", 2), "CA1", rep("", 2),
+                "CA2 L",rep("", 2), "CA2 R", rep("", 2), "CA2", rep("", 2),
+                "CA3 L", rep("", 2), "CA3 R", rep("", 2), "CA3", rep("", 2),
+                "DG L", rep("", 2), "DG R", rep("", 2), "DG", rep("", 2),
+                "ERC L", rep("", 2), "ERC R", rep("", 2), "ERC", rep("", 2),
+                "SULCUS L", rep("", 2), "SULCUS R", rep("", 2), "SULCUS", rep("", 2),
+                "SUB L", rep("", 2), "SUB R", rep("", 2), "SUB", rep("", 2),
+                "PHC L", rep("", 2), "PHC R", rep("", 2), "PHC", rep("", 2))
+
+# Table for contrasts
+tbl_contr_emm_fac_hc_main <- tbl_contr_emm_fac_df[c(7, 2, 6, 3:5)]
+```
+#### Table 5. Mixed Model Contrasts Comparing Groups for HC
+```{r echo = FALSE}
+# Print table
+datatable(tbl_contr_emm_fac_hc_main, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T)) %>%
+  formatRound(columns = c("P (unadjusted)"), digits = 3) %>%
+  formatRound(columns = c("df", "t"), digits = 1)
+```
+
+## Plot Estimated Marignal Means for Comparing Groups
+```{r plot groups HC}
+# New facet label names for variable
+new_labels <- c("BA35 L","BA35 R", "BA35",
+                "BA36 L","BA36 R", "BA36",
+                "CA1 L","CA1 R", "CA1",
+                "CA2 L","CA2 R", "CA2",
+                "CA3 L","CA3 R", "CA3",
+                "DG L","DG R", "DG",
+                "ERC L","ERC R", "ERC",
+                "SULCUS L", "SULCUS R", "SULCUS",
+                "SUB L", "SUB R", "SUB",
+                "PHC L", "PHC R", "PHC")
+
+                #"HC Total")
+
+names(new_labels) <- c("ba35_left_z", "ba35_right_z", "ba35_z", 
+                       "ba36_left_z", "ba36_right_z", "ba36_z", 
+                       "ca1_left_z", "ca1_right_z", "ca1_z", 
+                       "ca2_left_z", "ca2_right_z", "ca2_z",
+                       "ca3_left_z", "ca3_right_z", "ca3_z",
+                       "dg_left_z", "dg_right_z", "dg_z",
+                       "erc_left_z", "erc_right_z", "erc_z",
+                       "sulcus_left_z", "sulcus_right_z", "sulcus_z",
+                       "sub_left_z",  "sub_right_z", "sub_z",
+                       "phc_left_z",  "phc_right_z", "phc_z")
+
+# Define aes for func_plot
+tmpaes_plot <- aes(x = contrast,
+                   y = emmean,
+                   group = group_3,
+                   fill = group_3,
+                   color = group_3)
+
+tmpaes_errorbar <- aes(x = group_3,
+                    ymin = emmean-SE, 
+                    ymax = emmean+SE)
+
+tmpaes_geombar <- aes(x = group_3,
+                    y = emmean, 
+                    fill=group_3)
+
+# Define labels for func_plot_line_facet
+labeller_def <- labeller(.id = new_labels)
+
+facet_grid_def <- facet_wrap(. ~ .id,
+                             switch = "y",
+                             scales = "free",
+                             labeller = labeller_def,
+                             ncol = 3) 
+
+# Draw Plot 
+pd <- position_dodge(0.99)
+p.hc_emmeans_main <- func_plot_bar_facet(emm_fac %>%
+                                            mutate(
+                                                   .id = fct_relevel(.id, "ba35_left_z", "ba35_right_z", "ba35_z", 
+                       "ba36_left_z", "ba36_right_z", "ba36_z", 
+                       "ca1_left_z", "ca1_right_z", "ca1_z", 
+                       "ca2_left_z", "ca2_right_z", "ca2_z",
+                       "ca3_left_z", "ca3_right_z", "ca3_z",
+                       "dg_left_z", "dg_right_z", "dg_z",
+                       "erc_left_z", "erc_right_z", "erc_z",
+                       "sulcus_left_z", "sulcus_right_z", "sulcus_z",
+                       "sub_left_z",  "sub_right_z", "sub_z",
+                       "phc_left_z",  "phc_right_z", "phc_z"), #"hc_total_z"),
+                                                   group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG"))) 
+# Adjust legend size
+p.hc_emmeans_main <- p.hc_emmeans_main + theme(legend.key.size = unit(0.3, "cm"))
+```
+## Create Combined plot 
+```{r plot combined hc}
+# Combine plot 
+p.hc_comb <- plot_grid(p.hc_desc, p.hc_emmeans_main + rremove("x.text") +
+                          theme(legend.key.size = unit(0.3, "cm")),
+                        labels = c("a", "b"),
+                        ncol = 2, nrow = 1,
+                        rel_widths = c(1.5, 1.5))
+
+# Adjust legend size
+p.hc_comb <- p.hc_comb + theme(legend.key.size = unit(0.3, "cm"))
+
+# Save plot as pdf
+pdf("./Figures/MRI/p.hc_comb.pdf",
+    width = 20/2.54, 
+    height = 10/2.54,
+    useDingbats = FALSE) #in cm
+print(p.hc_comb)
+dev.off()
+```
+#### Figure 1. HC: (a) Time course of HC before, during, and after bed rest. (b) Main effect of bed rest. Data are means and SD adjusted for baseline.
+```{r, echo = FALSE, fig.width = 8, fig.height = 8, fig.cap = ""}
+print(p.hc_comb)
+```
+
+# High Res DG 
+## Contrasts for Comparing Groups
+```{r contrasts for groups hc dg}
+# select data
+df_tmp <- subset( df_hc, select = -c(hc_total_z, misc_left_z, misc_right_z, misc_z) )
+
+# Select dep vars
+dvList <- c("dg_left_z", "dg_right_z")
+
+# Add baseline as cov
+bdc <- "BDC-3"
+df_tmp <-  func_bdc_cov(df_tmp)
+
+# Define model
+model_mm <- paste0(" + sex"," + age", " + time.f", " * group_3", "+ (1|id)" )
+
+# Run mixed models
+tbl_mm_fac_aov <- sapply(func_mm_fac_with_bdc_adj_help(dvList), anova, simplify = FALSE, USE.NAMES = TRUE) 
+
+# Run emmeans
+emm_fac <- func_emm_fac_with_bdc_adj(dvList)
+
+# Contrasts
+
+# Define model for contrasts
+model_emmeans <- ~ time.f * group_3
+
+# Define contrasts
+contrast_type <- "pairwise"
+factors <- c("time.f")
+
+# Run contrasts
+tbl_contr_emm_fac_df <- func_tbl_contr_emm_fac_with_bdc_adj_fdr(dvList)
+
+# Order by p value
+tbl_contr_emm_fac_df <- tbl_contr_emm_fac_df[order(tbl_contr_emm_fac_df$'P (FDR Adjusted)'),]
+
+# Plot
+emm_fac_tmp <- subset(emm_fac, .id == "dg_right_z" | .id == "dg_left_z")
+
+
+
+```
+
+#### Figure 1. DG R: (a) Time course of DG R before, during, and after bed rest. (b) Main effect of bed rest. Data are means and SD adjusted for baseline.
+```{r, echo = FALSE, fig.width = 6, fig.height = 4, fig.cap = ""}
+#print(p.hc_emmeans_dg)
+```
+## Create plot DG XXXX
+```{r xxx}
+# New facet label names for variable
+new_labels <- c("DG L", "DG R")
+names(new_labels) <- c("dg_left_z", "dg_right_z")
+
+# Define aes for func_plot
+tmpaes_plot <- aes(x = time.f,
+                   y = emmean,
+                   group = group_3,
+                   fill = group_3,
+                   color = group_3)
+
+tmpaes_errorbar <- aes(x = time.f,
+                    ymin = emmean-SE, 
+                    ymax = emmean+SE)
+
+tmpaes_geombar <- aes(x = time.f,
+                    y = emmean, 
+                    fill=group_3)
+
+# Define labels for func_plot_line_facet
+labeller_def <- labeller(.id = new_labels)
+
+facet_grid_def <- facet_wrap(.id ~ .,
+                             #switch = "y",
+                             scales = "free",
+                             labeller = labeller_def,
+                             ncol = 2) 
+
+
+# Draw Plot 
+pd <- position_dodge(0.99)
+p.hc_emmeans_dg <- func_plot_bar_facet(emm_fac_tmp %>%
+                                         mutate(
+                                                .id = fct_relevel(.id, "dg_left_z", "dg_right_z"), 
+                                                group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG"),
+                                                time.f = fct_relevel(time.f, "HDT30", "HDT59", "R+11")
+                                                )
+                                       ) 
+# Adjust legend size
+p.hc_emmeans_dg <- p.hc_emmeans_dg + theme(legend.key.size = unit(0.3, "cm"))
+
+
+#### right DG
+emm_fac_tmp <- subset(emm_fac, .id == "dg_right_z")
+
+# New facet label names for variable
+new_labels <- c( "")
+names(new_labels) <- c("dg_right_z")
+
+# Define aes for func_plot
+tmpaes_plot <- aes(x = time.f,
+                   y = emmean,
+                   group = group_3,
+                   fill = group_3,
+                   color = group_3)
+
+tmpaes_errorbar <- aes(x = time.f,
+                    ymin = emmean-SE, 
+                    ymax = emmean+SE)
+
+tmpaes_geombar <- aes(x = time.f,
+                    y = emmean, 
+                    fill = group_3)
+
+# Define labels for func_plot_line_facet
+labeller_def <- labeller(.id = new_labels)
+
+facet_grid_def <- facet_wrap(.id ~ time.f,
+                             #switch = "y",
+                             labeller = labeller_def,
+                             ncol = 3) 
+
+#facet_grid_def <- facet_grid(.id ~ .,
+#                             #switch = "y",
+#                             labeller = labeller_def) 
+
+# Draw Plot 
+p.hc_emmeans_dg_r <- func_plot_bar_singlevar(emm_fac_tmp %>%
+                                            mutate(
+                                                   .id = fct_relevel(.id, "dg_right_z"), 
+                                                   group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG"),
+                                                   time.f = fct_relevel(time.f, "HDT30", "HDT59", "R+11")
+                                                   )
+                                            ) 
+
+# Adjust scales, titles, and legend size
+p.hc_emmeans_dg_r <- p.hc_emmeans_dg_r + scale_y_continuous(expand = c(0,0),
+                                                            limits = c(-0.35, 0.4),
+                                                            breaks = seq(-0.3, 0.4, 0.1), labels = label_number((accuracy = 0.1)) ) +
+  labs(y = "Dentate Gyrus R", x = "") + theme(legend.key.size = unit(0.3, "cm"), strip.text.y = element_blank() )
+
+
+# Table contrasts 
+tbl_contr_emm_fac_df_dg <- subset(tbl_contr_emm_fac_df, .id == "dg_right_z" | .id == "dg_left_z" | .id == "dg_z")
+
+datatable(tbl_contr_emm_fac_df_dg, 
+          rownames = FALSE, filter = "top",
+          options = list(pageLength = 50, 
+                         scrollX = T))
+                     
+                     
+```                         
+## Create plot DG
+```{r plot combined hc dg}
+# Combine plot 
+# Adjust legend size
+#p.hc_emmeans_dg_r <- p.hc_emmeans_dg_r + theme(legend.key.size = unit(0.3, "cm"))
+
+# Save plot as pdf
+#pdf("./Figures/MRI/p.hc_emmeans_dg_r.pdf",
+#    width = 10/2.54, 
+#    height = 8/2.54,
+#    useDingbats = FALSE) #in cm
+#print(p.hc_emmeans_dg_r)
+#dev.off()
+```
+
+# MTR HC
+```{r MTR HC}
+# Select data
+df_mtr_tmp <- df_mtr[c(1:2,5:6)]
+
+df_hc_tmp <- subset( df_hc, select = c(id, time.f, hc_total_z, dg_left_z, dg_right_z, dg_z) )
+
+df_tmp <- merge(df_mtr_tmp, df_hc_tmp, by = c("id", "time.f"))
+
+df_tmp <- melt(df_tmp, id.vars = c("id", "time.f"))
+df_tmp <- as_tibble(df_tmp)
+
+# Compute Change scores
+df_tmp_change <- df_tmp %>%
+  group_by(id, variable) %>%
+  dplyr::summarise(
+    change_hdt30 = value[time.f == "HDT30"] - value[time.f == "BDC-3"],
+    change_hdt59 = value[time.f == "HDT59"] - value[time.f == "BDC-3"],
+    change_r11 = value[time.f == "R+11"] - value[time.f == "BDC-3"],
+  )
+
+df_tmp_change <- df_tmp_change %>% 
+  filter(!str_detect(variable, 'dg_z') & !str_detect(variable, 'hc_total_z'))
+df_tmp_change <- droplevels(df_tmp_change)
+
+# Add side as var
+df_tmp_change$side <- str_replace(df_tmp_change$variable, pattern = ".*_([^-]*)_.*", replacement = "\\1")
+
+# Clean var
+df_tmp_change$variable <- gsub( "_right", "", df_tmp_change$variable )
+df_tmp_change$variable <- gsub( "_left", "", df_tmp_change$variable )
+
+# Convert data types
+df_tmp_change[c(1:2,6)] <- lapply(df_tmp_change[c(1:2,6)], as.factor)
+
+# Convert to long
+df_tmp_change <- melt(df_tmp_change, id.vars = c("id", "variable", "side"))
+colnames(df_tmp_change)[4] <- "time"
+
+df_tmp_change <- dcast(df_tmp_change, id + side ~ variable + time, value.var = c("value"))
+
+# Plot scatter
+p.scatter_hc_mtr <- ggplot(df_tmp_change, aes(x = mtr_hc_z_change_hdt59, y = dg_z_change_hdt59 )) +
+    geom_point(aes(color = factor(side))) +
+    stat_smooth(method = "lm",
+        col = "black",
+        se = FALSE,
+        size = 1)
+p.scatter_hc_mtr
+
+# Regression
+reg_hc_mtr <- summary ( lm(mtr_hc_z_change_hdt59 ~ dg_z_change_hdt59, data = df_tmp_change) )
+```

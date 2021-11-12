@@ -1,0 +1,190 @@
+---
+title: "AGBRESA Extract Biomarker Data"
+author: "A Stahn"
+date: "11/08/2021"
+output: html_document
+---
+```{r include = FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+# Prepare Script
+## Required Packages
+```{r load required packages, message = FALSE}
+library(knitr) # for kable
+library(readxl) # read xls
+library(openxlsx) # save tables
+library(reshape2) # wide to long
+library(plyr) # ldply
+library(tidyverse) # for fct_relevel
+
+library(lme4) # for adding mixed model functions to plot
+library(lmerTest) # for adding mixed model functions to plot
+library(qdapTools) # list_df2df(tbl_mm_fac_aov)
+```
+## Print Session Info
+```{r print R and package versions}
+print(sessionInfo())
+```
+## Load Data
+```{r load data}
+# Demographics
+df_demo <- read_excel("./Data/Data Demographics.xlsx",sheet = "Data Demo")
+df_demo[c(1:5)] <- lapply(df_demo[c(1:5)], as.factor)
+
+# Blood
+df_blood_morn <- read_excel("./Data/Data Biomarker.xlsx", sheet = "Data Blood Morning z")
+df_blood_morn[c(1:2,4)] <- lapply(df_blood_morn[c(1:2,4)], as.factor)
+df_blood_morn[c(3, 5:11)] <- lapply(df_blood_morn[c(3, 5:11)], as.numeric)
+names(df_blood_morn)[names(df_blood_morn) == "tod"] <- "cond.f"
+
+# Cortisol
+df_cort_morn <- read_excel("./Data/Data Biomarker.xlsx", sheet = "Data Cortisol Morning z")
+df_cort_morn[c(1:2,4)] <- lapply(df_cort_morn[c(1:2,4)], as.factor)
+names(df_cort_morn)[names(df_cort_morn) == "tod"] <- "cond.f"
+names(df_cort_morn)[names(df_cort_morn) == "cort_z"] <- "cort_morn_z"
+
+df_cort_eve <- read_excel("./Data/Data Biomarker.xlsx", sheet = "Data Cortisol Evening z")
+df_cort_eve[c(1:2,4)] <- lapply(df_cort_eve[c(1:2,4)], as.factor)
+names(df_cort_eve)[names(df_cort_eve) == "tod"] <- "cond.f"
+names(df_cort_eve)[names(df_cort_eve) == "cort_z"] <- "cort_eve_z"
+
+df_cort <- merge(df_cort_morn[-c(4)], df_cort_eve[-c(4)], by = c("id", "time.f", "time.n") )
+df_bio <- merge(df_blood_morn[-c(4)], df_cort, by = c("id", "time.f", "time.n") )
+
+```
+# Function summary stats
+```{r summary functions}
+# Function mean bdc
+func_mean_bdc <- function(data,...) {
+  
+  df_tmp <- reshape2::melt(data, 
+                              id.vars = id_vars ) %>%
+    droplevels()
+  
+  df_mean_bdc <- df_tmp %>%
+    
+    filter(time.n < (time.n_bdc + 1) )
+  
+  groups <- enquos(...)
+  
+  df_mean_bdc <- df_mean_bdc %>%
+    
+    group_by(!!!groups) %>%
+    
+    dplyr::summarise(
+      mean_bdc = mean(value, na.rm = T)
+    )
+  return(df_mean_bdc)
+}
+
+# Function mean hdt
+func_mean_hdt <- function(data,...) {
+  
+  df_mean_hdt <- reshape2::melt(data, 
+                              id.vars = id_vars ) %>%
+    droplevels()
+  
+  df_mean_hdt <- df_mean_hdt %>%
+    
+    filter(time.n > time.n_bdc & time.n < time.n_rec)
+    
+    groups <- enquos(...)
+  
+  df_mean_hdt <- df_mean_hdt %>%
+  
+    group_by(!!!groups) %>%
+    #group_by(id, variable, task) %>%
+    
+    dplyr::summarise(
+      mean_hdt = mean(value, na.rm = T)
+    )
+  df_mean_hdt <- merge( df_mean_hdt, df_mean_bdc, by = c(id_vars_merge) )
+  df_mean_hdt$hdt_mean_bdc_adj <- df_mean_hdt$mean_hdt - df_mean_hdt$mean_bdc
+  df_mean_hdt <- df_mean_hdt[-c(4)]
+  df_mean_hdt <- reshape2::melt(df_mean_hdt, 
+                              id.vars = c(id_vars_merge) )
+  return(df_mean_hdt)
+}
+
+# Compute change scores 
+func_changescore <- function(data,...) {
+  
+  df_tmp <- reshape2::melt(data, 
+                              id.vars = id_vars ) 
+ 
+  #df_changescore <- subset(df_tmp, time.f == pre_changescore | time.f == post_changescore)
+  #df_changescore <- droplevels(df_changescore) 
+
+  groups <- enquos(...)
+  
+  df_changescore <- df_tmp %>%
+  
+    group_by(!!!groups) %>%
+  
+    #group_by(id, variable, task) %>%
+    dplyr::summarise(
+      value = value[time.f == post_changescore] - value[time.f == pre_changescore])
+  df_changescore$value_type <- as.factor ( c( rep ("change_score", nrow(df_changescore) ) ) ) # Add id var for task
+
+  return(df_changescore)
+}
+```
+# Biomarker
+```{r biomarker}
+# Combine blood and cortisol data 
+df_bio <- merge(df_blood_morn[-c(4)], df_cort, by = c("id", "time.f", "time.n") )
+
+# Compute mean hdt
+# Define vars for mean hdt
+id_vars <- c("id", "time.f", "time.n") 
+id_vars_merge <- c("id", "variable") 
+time.n_bdc <- 2
+time.n_rec <- 8
+
+# Compute average baseline
+df_mean_bdc <- func_mean_bdc(df_bio, id, variable)
+
+# Compute hdt
+df_mean_hdt <- func_mean_hdt(df_bio, id, variable)
+
+# Rename columns
+names(df_mean_hdt)[3] <- "value_type"
+df_mean_hdt <- as_tibble(df_mean_hdt)
+
+# Compute change scores
+# Compute average bdc
+df_mean_bdc <- reshape2::dcast(df_mean_bdc, id ~ variable, value.var = "mean_bdc")
+df_mean_bdc$value_type <- as.factor ( c( rep ("BDC_av", nrow(df_mean_bdc) ) ) ) 
+names(df_mean_bdc)[names(df_mean_bdc) == "value_type"] <- "time.f"
+df_mean_bdc$time.n <- as.numeric ( c( rep ("1", nrow(df_mean_bdc) ) ) ) 
+
+# Add mean bdc to df
+df_bio_tmp <- rbind(df_mean_bdc, df_bio) 
+
+# Define vars for mean hdt
+pre_changescore <- "BDC_av"
+post_changescore <- "HDT56"
+
+# Run change scores
+df_bio_changescore <- func_changescore(df_bio_tmp, id, variable)
+
+#df_bio_changescore <- reshape2::dcast(df_bio_changescore, id + value_type ~ variable, value.var = "value")
+
+#df_bio_changescore <- reshape2::melt(df_bio_changescore, id.vars = c("id", "value_type") )
+
+# Combine dfs
+df_bio_sumstats <- rbind(df_mean_hdt, df_bio_changescore)
+```
+
+# Write to Excel File
+```{r export}
+list_of_datasets <- list( 
+                          "Data Bio Int" = df_bio_sumstats)
+write.xlsx(list_of_datasets, file = "./Data/Data Int Bio.xlsx", overwrite = TRUE)
+```
+
+
+
+
+

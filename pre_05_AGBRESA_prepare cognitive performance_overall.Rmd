@@ -93,14 +93,14 @@ df_pto[c(1:3)] <- lapply(df_pto[c(1:3)], as.factor)
 
 # Clean 
 df_pto <- df_pto[-c(4,6)]
-colnames(df_pto)[6] <- "acc_z"
+colnames(df_pto)[7] <- "acc_z"
 #df_pto <- df_pto[-c(4)] # drops distance error var
 
 # Add id var for task
 df_pto$task <- as.factor ( c( rep ("pto", nrow(df_pto) ) ) )
 
 # Extract primary outcome
-df_pto_prout_5 <- subset(df_pto, cond.f =="5")
+df_pto_prout_5 <- subset(df_pto, cond.f == "5")
 df_pto_prout_5 <- df_pto_prout_5[-c(3)]
 
 # Mean across blocks

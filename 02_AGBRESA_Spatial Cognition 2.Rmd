@@ -1,15 +1,36 @@
 ---
-title: "AGBRESA Spatial Cognition 2"
-author: "A Stahn"
-date: "10/27/2021"
-output: html_document
+title: "Appendix Final Report HyperCampus Spatial Cognition 2"
+#author: "A Stahn"
+#date: "10/27/2021"
+#output:
+ # officedown::rdocx_document
+  #word_document:
+    #number_sections: TRUE
+    #fig_caption: TRUE
+  #bookdown::html_document2:
+  #number_sections: TRUE
+  #fig_caption: TRUE
+  #always_allow_html: true
+output:  
+  officedown::rdocx_document:
+    tables:
+      table.align: "center"
+      caption:
+        style: Table Caption
+        pre: 'Table '
+        sep: '. '
+        text.align: "left"
+    plots:
+      align: left
+      caption:
+        sep: '. '
 ---
 
 ```{r include = FALSE}
-knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, dpi = 300, echo = FALSE)
 ```
 # Prepare Script
-## Required Packages
+##Required Packages
 ```{r load required packages, message = FALSE}
 library(knitr) # for kable
 library(readxl) # read xls
@@ -29,56 +50,16 @@ library(ggplot2)
 library(ggsci)
 library(scales)
 library(cowplot) # for plot_grid, combine plots using cowplot
+library(officedown)
+library(officer)
+library(flextable)
 ```
-## Print Session Info
+##Print Session Info
 ```{r print R and package versions}
 print(sessionInfo())
 ```
-## Themes for Plots
-```{r create themes and correction factors}
-# Correct ggplot2 pts and fonts
-ggplot_factor_line <- ggplot2::.pt*72.27/96
-ggplot_factor_font = 1.0
 
-# Create project report theme
-theme_report_white  <-  theme_pubr() + theme(
-  axis.line = element_line(size = 0.5 / ggplot_factor_line,color="black"),
-  axis.ticks = element_line(size = 0.5 / ggplot_factor_line, color="black"),
-  axis.ticks.length = unit(0.2, "cm"), 
-  text = element_text(size = 8 * ggplot_factor_font,
-                      family="Helvetica",
-                      colour="black"),
-  axis.text.x=element_text(angle = 0, 
-                           vjust = 0.5,
-                           size = 8 * ggplot_factor_font,
-                           family = "Helvetica",
-                           colour = "black"), #face="bold"
-  axis.text.y = element_text(angle = 0,
-                            vjust=0.5,
-                            size= 8 * ggplot_factor_font,
-                            family = "Helvetica",
-                            colour="black"),
-  axis.title.x = element_text(angle = 0,
-                            vjust =0.5,
-                            size= 8 * ggplot_factor_font,
-                            family="Helvetica",
-                            colour="black",
-                            face="bold"),
-  axis.title.y = element_text(angle = 90,
-                            vjust = 0.5,
-                            size= 8 * ggplot_factor_font,
-                            family = "Helvetica",
-                            colour = "black",
-                            face = "bold") # face = "bold" 
-  )
-
-#color
-#p.sut_desc <- p.sut_desc + scale_color_brewer(palette="Paired",limits = c("cAG", "iAG", "CTRL"), labels = c("cAG", "iAG", "CTRL"))+scale_fill_brewer(palette="Paired",limits = c("cAG", "iAG", "CTRL"), labels = c("cAG", "iAG", "CTRL"))
-#p.sut <- p.sut + scale_colour_manual(values = c("black", "black", "black"), labels = c("cAG", "iAG", "CTRL"))+scale_fill_brewer(palette="Paired",limits = c("cAG", "iAG", "CTRL"), labels = c("cAG", "iAG", "CTRL"))
-#p.sut_main <- p.sut_main + scale_color_brewer(palette="Paired",limits = c("cAG", "iAG", "CTRL"), labels = c("cAG", "iAG", "CTRL"))+scale_fill_brewer(palette="Paired",limits = c("cAG", "iAG", "CTRL"), labels = c("cAG", "iAG", "CTRL"))
-
-```
-## Load Data
+##Load Data
 ```{r load data}
 #  Demographics
 df_demo <- read_excel("./Data/Data Demographics.xlsx", sheet = "Data Demo")
@@ -126,8 +107,7 @@ df_navstrat$direction <- factor(df_navstrat$direction,
 levels = c("diff", "same"),
 labels = c("Different", "Same"))
 ```
-# Definition of Helper Functions 
-## Descriptive Functions
+#Functions Descritpive Stats
 ```{r functions for descriptive stats}
 # Function to check data completion 
 func_data_completion <- function(data, ...) {
@@ -171,77 +151,25 @@ func_desc <- function(data, ...) {
       )
   return(result)
 }
-```
-## Plot Functions
-```{r functions for plots}
-# Wrapper function for line plots, forwards to func_plot_line_facet
-func_plot_line <- function(x) {ggplot(x, tmpaes_plot) + 
-    theme_report_white +
-    geom_line(position = pd) +
-    geom_errorbar(tmpaes_errorbar,
-                  width =.4, 
-                  position = pd) +
-    geom_point(position = pd,
-               shape = 21,
-               size = 2) + # shape = 21, size = 1, fill = "white"
-    scale_y_continuous(expand = c(0,0)) +
-    labs(y = "", x = "Time", size = 10) +
-    theme(legend.title = element_blank(),
-          legend.text = element_text(size = 8),
-          axis.title.x = element_text(size = 10))
+
+func_bdc_correction <- function(data,..){
+ df_tmp <- data %>%
+    subset(time.f == bdc) %>%
+    group_by(group_3, variable) %>%
+    dplyr::summarise(
+      mean_bdc_by_group = mean(MEAN, na.rm = T)
+      )
+  
+  df_tmp <- merge(df_tmp, data, by = c("group_3", "variable") )
+  df_tmp <- df_tmp %>%
+    mutate(MEAN_corr = case_when(time.f == bdc ~
+                              MEAN-mean_bdc_by_group,
+                            TRUE ~ MEAN)) %>%
+    select( c(!mean_bdc_by_group & !MEAN) ) %>%
+    dplyr::rename(MEAN = MEAN_corr)
   }
-
-# Function for line plots, takes 'desc' as input
-func_plot_line_facet <- function(x) {func_plot_line(x) +
-    facet_grid_def +
-    theme(strip.placement = "outside",
-          strip.background = element_rect(color = "transparent",
-                                          fill = "transparent", size = 1.5,
-                                          linetype = "solid"),
-          strip.text = element_text(size = 10,
-                                    color = "black",
-                                    face = "bold"),
-          panel.spacing.y = unit(2, "lines"))
-}
-
-# Wrapper function for bar plots, forwards to func_plot_bar_facet
-func_plot_bar <- function(x) {ggplot(x, tmpaes_plot) + theme_report_white +
-    geom_hline(yintercept = 0,
-               size = 0.3,
-               linetype = "solid") +
-    geom_errorbar(tmpaes_errorbar,
-                 width = .4,
-                  position = pd,
-                  color = "black") +
-    geom_bar(tmpaes_geombar, # separate by category
-             stat = "identity", 
-             position = pd,
-             width = 1.0,
-             color = "black") + # make it side-by-side
-    scale_y_continuous(expand = c(0,0)) +
-    labs(y = "", x = "", size = 10) +
-    guides(x = "none") +
-    theme(legend.title = element_blank(),
-          legend.text = element_text(size=8),
-          axis.title.x = element_text(size = 10),
-          axis.text.x = element_blank(),
-          axis.ticks.x = element_blank())
-}
-
-# Function for bar plots, takes 'desc' as input
-func_plot_bar_facet <- function(x) {func_plot_bar(x) +
-    facet_grid_def +
-    theme(strip.placement = "outside",
-          strip.background = element_rect(color = "transparent",
-                                          fill = "transparent", size = 1.5,
-                                          linetype = "solid"),
-          strip.text = element_text(size = 10,
-                                    color = "black",
-                                    face = "bold"),
-          panel.spacing.y = unit(2, "lines"))
-}
 ```
-## Functions for Mixed Models
+##Functions for Mixed Models
 ```{r functions for mixed models}
 # Wrapper for appending bdc data as covariate
 func_bdc_cov <- function(data, ...) {
@@ -282,7 +210,6 @@ func_tbl_aov_nlme <- function(x) {
   return(tbl_mm_fac_aov)
 }
 
-
 # Helper function emmeans, takes 'dvList'; requires to define 'model', e.g., model <- c(~ time.f * group_3 * cond.f)
 func_emm_fac_nlme <- function(x) {
   mm_fac <- func_mm_fac_help_nlme(dvList)
@@ -302,7 +229,7 @@ func_contrasts_emm_fac_nlme <- function(x) {
   contrasts_mm_fac <- lapply(emm_fac, function(emm_fac) contrast(emm_fac, contrast_type,
                                                                          by = factors,
                                                                          lmer.df = "satterthwaite",
-                                                                         adjust="none"))
+                                                                         adjust="fdr"))
   contrasts_mm_fac <- lapply(contrasts_mm_fac, summary, infer = T) #add adj confidence intervals (adjusted if adjustment method is selected: https://cran.r-project.org/web/packages/emmeans/vignettes/confidence-intervals.html)
   contrasts_mm_fac_ <- lapply(contrasts_mm_fac, data.frame) #create df
   contrasts_mm_fac_df <- ldply(contrasts_mm_fac_, data.frame) #create df
@@ -374,7 +301,7 @@ func_contrasts_emm_fac <- function(x) {
   contrasts_mm_fac <- lapply(emm_fac, function(emm_fac) contrast(emm_fac, contrast_type,
                                                                          by = factors,
                                                                          lmer.df = "satterthwaite",
-                                                                         adjust="none"))
+                                                                         adjust="fdr"))
   contrasts_mm_fac <- lapply(contrasts_mm_fac, summary, infer=T) #add adj confidence intervals (adjusted if adjustment method is selected: https://cran.r-project.org/web/packages/emmeans/vignettes/confidence-intervals.html)
   contrasts_mm_fac_ <- lapply(contrasts_mm_fac, data.frame) #create df
   contrasts_mm_fac_df <- ldply(contrasts_mm_fac_, data.frame) #create df
@@ -404,6 +331,118 @@ func_tbl_contr_emm_fac <- function(dvList) {
   colnames(tmp)[ncol(tmp)-2] <- "t"
   colnames(tmp)[2] <- "Contrast"
   return(tmp)
+}
+```
+#Functions tables
+```{r functions for flextable}
+theme_tableflex_report <- function(x, ...) {
+  std_b <- fp_border(width = 1.5, color = "black")
+  thin_b <- fp_border(width = 0.5, color = "black")
+    x <- border_remove(x)
+    x <- hline(x, border = thin_b, part = "all")
+    x <- hline_top(x, border = std_b, part = "header")
+    x <- hline_bottom(x, border = std_b, part = "header")
+    x <- hline_bottom(x, border = std_b, part = "body")
+    x <- bold(x = x, bold = TRUE, part = "header")
+    x <- align_text_col(x, align = "left", header = TRUE)
+    x <- align_nottext_col(x, align = "center", header = TRUE)
+    fix_border_issues(x)
+    autofit(x)
+}
+
+set_flextable_defaults(
+  font.size = 10,
+  font.family = "Times New Roman",
+  theme_fun = theme_tableflex_report)
+  #padding = 6)
+  #background.color = "#EFEFEF")
+```
+#Themes for Plots
+```{r create themes and correction factors}
+# Correct ggplot2 pts and fonts
+ggplot_factor_line <- ggplot2::.pt*72.27/96
+ggplot_factor_font = 1.0
+
+# Create project report theme
+theme_report <- function(base_size = 8) {
+  theme_pubr() + #%+replace%
+    theme(
+      plot.margin = margin(0, 0, 0, 0, "cm"),
+      text = element_text(size = 8,
+                      colour="black"), #family="Helvetica"
+      # axes
+      axis.title = element_text(size = 8, face = "bold"), #vjust = 0.5
+      axis.text = element_text(size = 8), #angle = 0
+      axis.line = element_line(size = 0.5 / ggplot_factor_line, color="black"),
+      axis.ticks = element_line(size = 0.5 / ggplot_factor_line, color="black"),
+      axis.ticks.length = unit(0.2, "cm"), 
+      # legend
+      legend.key = element_rect(fill = "transparent", colour = NA),
+      legend.key.size = unit(1.5, "lines"),
+      legend.background = element_rect(fill = "transparent", colour = NA),
+      legend.title = element_blank(),
+      legend.text = element_text(size = 8),
+      axis.title.x = element_text(size = 8),
+      # facetting
+      strip.placement = "outside",
+          strip.background = element_rect(color = "transparent",
+                                          fill = "transparent", size = 1.5),
+                                          #linetype = "solid"),
+          strip.text = element_text(size = 8,
+                                    color = "black",
+                                    face = "bold"),
+          panel.spacing.y = unit(1.5, "lines")
+    )
+}
+
+```
+#Functions Plotting
+```{r functions for plots}
+# Wrapper function for line plots, forwards to func_plot_line_facet
+func_plot_line <- function(x) {ggplot(x, tmpaes_plot) + 
+    theme_report() +
+    geom_line(position = pd,
+              size = 0.3) +
+    geom_errorbar(tmpaes_errorbar,
+                  width =.4,
+                  size = 0.3,
+                  position = pd) +
+    geom_point(position = pd,
+               #shape = 21,
+               size = 2) +
+    scale_y_continuous(expand = c(0,0)) +
+    labs(y = "", x = "Time", size = 10)
+    #scale_shape_manual(values=c(3, 16, 17))+
+  }
+
+# Function for line plots, takes 'desc' as input
+func_plot_line_facet <- function(x) {func_plot_line(x) +
+    facet_grid_def
+}
+
+
+# Function for bar plots, forwards to func_plot_bar_facet
+func_plot_bar <- function(x) {ggplot(x, tmpaes_plot) + theme_report() +
+    geom_hline(yintercept = 0,
+               size = 0.3,
+               linetype = "solid") +
+    geom_errorbar(tmpaes_errorbar,
+                 width = .4,
+                  position = pd,
+                  color = "black") +
+    geom_bar(tmpaes_geombar, # separate by category
+             stat = "identity", 
+             position = pd,
+             width = 1.0,
+             color = "black") + # make it side-by-side
+    scale_y_continuous(expand = c(0,0)) +
+    labs(y = "", x = "", size = 10) +
+    guides(x = "none")
+}
+
+# Function for bar plots, takes 'desc*' as input
+func_plot_bar_facet <- function(x) {func_plot_bar(x) +
+    facet_grid_def
 }
 ```
 # Data Completion Check
@@ -452,15 +491,15 @@ colnames(spat_bat_2_summary)[3] <- "Completed (N)"
 colnames(spat_bat_2_summary)[4] <- "Completed (%)"
 spat_bat_2_summary <- as.data.frame(spat_bat_2_summary)
 ```
-#### Table 1. Data collection summary Spatial Cognition 2.
-```{r echo = FALSE}
-datatable(spat_bat_2_summary) %>%
-    formatRound(columns=c("Completed (%)"), digits = 1)
-
-round(mean(spat_bat_2_summary$'Completed (%)'), 1)
+```{r tab.cap = "Data collection summary Spatial Cognition 2.", tab.cap.style = "Table Caption", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+spat_bat_2_summary <- spat_bat_2_summary %>% flextable() %>% autofit() %>% 
+  colformat_double(j = c("Completed (%)"), digits = 1) 
+# Print
+spat_bat_2_summary
 ```
 # Spatial Orientation Task
-## Mixed Model Comparing Groups
+##Mixed Model Comparing Groups
 ```{r mixed model SOT}
 # Compute desc
 desc <- func_desc(df_sot, group_3, variable)
@@ -497,18 +536,15 @@ blanks <- rep("", length(Parameter) / length(dvList) - 1)
 Variable <- c("Speed", blanks,"Accuracy", blanks, "Efficiency", blanks)
 tbl_mm_fac_aov_df_sot <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(2:5)])
 ```
-#### Table 2. Mixed Model Summary for Spatial Orientation Task.
-```{r echo = FALSE}
-# Print table
-datatable(tbl_mm_fac_aov_df_sot, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns=c("P"), digits = 3) %>%
-  formatRound(columns=c("df2", "F"), digits = 1)
+```{r tab.cap = "Mixed Model Summary for Spatial Orientation Task.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_mm_fac_aov_df_sot <- tbl_mm_fac_aov_df_sot %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df2", "F"), digits = 1) %>% 
+  colformat_double( j = c("P"), digits = 3 ) 
+# Print
+tbl_mm_fac_aov_df_sot
 ```
-
-## Contrasts for Group Comparisons
+##Contrasts for Group Comparisons
 ```{r contrasts between groups SOT}
 # Contrasts
 # Define model for contrasts
@@ -529,18 +565,15 @@ tbl_contr_emm_fac_df$Variable <- c("Speed", rep("", 2),
 # Table for contrasts
 tbl_contr_emm_fac_df_sot <- tbl_contr_emm_fac_df[c(7, 2, 6, 3:5)]
 ```
-#### Table 3. Mixed Model Group Contrasts for Spatial Orientation Task.
-```{r echo = FALSE}
-# Print table
-datatable(tbl_contr_emm_fac_df_sot, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns=c("P (unadjusted)"), digits = 3) %>%
-  formatRound(columns=c("t"), digits = 2)
+```{r tab.cap = "Mixed Model Group Contrasts for Spatial Orientation Task.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_contr_emm_fac_df_sot <- tbl_contr_emm_fac_df_sot %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df", "t"), digits = 1) %>% 
+  colformat_double( j = c("P (unadjusted)"), digits = 3 ) 
+# Print
+tbl_contr_emm_fac_df_sot
 ```
-
-## Plot Estimated Marignal Means for Group Comparisons
+##Plot Estimated Marignal Means for Group Comparisons
 ```{r plot emmeans by group SOT}
 # Run emmeans
 emm_fac <- func_emm_fac_nlme(dvList) #requires mm_fac from nlme
@@ -588,14 +621,34 @@ pdf("./Figures/Spatial Cognition 2/p.sot_emmeans.pdf",
     useDingbats = FALSE) #in cm
 print(p.sot_emmeans)
 dev.off()
-```
-#### Figure 1. Spatial Orientation Task: Effects of Bed Rest on Speed, Accuracy, and Efficiency on HDT59. Data are means and SE.
-```{r, echo = FALSE, fig.width = 3, fig.height = 3, fig.cap = ""}
-print(p.sot_emmeans)
-```
 
+# Accuracy only
+p.sot_emmeans_acc <- func_plot_bar_facet(subset(emm_fac, .id == "pointing_error_z") %>% 
+                                       mutate(
+                                         .id = fct_relevel(.id, "pointing_error_z"),
+                                         group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")
+                                         )
+                                     ) 
+
+# Adjust legend size
+p.sot_emmeans_acc <- p.sot_emmeans_acc + theme(legend.key.size = unit(0.3, 'cm'))
+
+# Save plot as pdf
+pdf("./Figures/Spatial Cognition 2/p.sot_emmeans_acc.pdf",
+    width = 3/2.54,
+    height = 8/2.54,
+    useDingbats = FALSE) #in cm
+print(p.sot_emmeans_acc)
+dev.off()
+```
+```{r fig.id = "tsplot", fig.cap.style = "Image Caption", fig.width = 3, fig.height = 2.5, echo = FALSE, fig.cap = "Spatial Orientation Task: Effects of HDBR on Speed, Accuracy, and Efficiency on HDT59. Data are means and SE."}
+p.sot_emmeans
+```
+```{r fig.id = "tsplot", fig.cap.style = "Image Caption", fig.width = 1.3, fig.height = 2.5, echo = FALSE, fig.cap = "Spatial Orientation Task: Effects of Bed Rest on Accuracy on HDT59. Data are means and SE."}
+p.sot_emmeans_acc
+```
 # Virtual Water Maze
-## Mixed Model Comparing Groups
+##Mixed Model Comparing Groups
 ```{r mixed model vWM}
 # Compute desc
 desc <- func_desc(df_wm, group_3, variable)
@@ -633,17 +686,15 @@ blanks <- rep("", length(Parameter) / length(dvList) - 1)
 Variable <- c("Speed", blanks,"Pathlength", blanks, "Heading Error", blanks)
 tbl_mm_fac_aov_df_wm <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(2:5)])
 ```
-#### Table 4. Mixed Model Summary for virtual Water Maze Task.
-```{r echo = FALSE}
-# Print table
-datatable(tbl_mm_fac_aov_df_wm, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns=c("P"), digits = 3) %>%
-  formatRound(columns=c("df2", "F"), digits = 1)
+```{r tab.cap = "Mixed Model Summary for virtual Water Maze Task.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_mm_fac_aov_df_wm <- tbl_mm_fac_aov_df_wm %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df2", "F"), digits = 1) %>% 
+  colformat_double( j = c("P"), digits = 3 ) 
+# Print
+tbl_mm_fac_aov_df_wm
 ```
-## Contrasts for Group Comparisons
+##Contrasts for Group Comparisons
 ```{r contrasts between groups vWM}
 # Contrasts
 # Define model for contrasts
@@ -664,17 +715,15 @@ tbl_contr_emm_fac_df$Variable <- c("Speed", rep("", 2),
 # Table for contrasts
 tbl_contr_emm_fac_df_wm <- tbl_contr_emm_fac_df[c(7, 2, 6, 3:5)]
 ```
-#### Table 5. Mixed Model Group Contrasts for virtual Water Maze Task.
-```{r echo = FALSE}
-# Print table
-datatable(tbl_contr_emm_fac_df_wm, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns=c("P (unadjusted)"), digits = 3) %>%
-  formatRound(columns=c("t"), digits = 2)
+```{r tab.cap = "Mixed Model Group Contrasts for virtual Water Maze Task.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_contr_emm_fac_df_wm <- tbl_contr_emm_fac_df_wm %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df", "t"), digits = 1) %>% 
+  colformat_double( j = c("P (unadjusted)"), digits = 3 ) 
+# Print
+tbl_contr_emm_fac_df_wm
 ```
-## Plot Estimated Marignal Means for Group Comparisons
+##Plot Estimated Marignal Means for Group Comparisons
 ```{r plot emmeans by groups vWM}
 # Run emmeans
 emm_fac <- func_emm_fac_nlme(dvList) # requires mm_fac from nlme
@@ -720,14 +769,32 @@ pdf("./Figures/Spatial Cognition 2/p.wm_emmeans.pdf",
     useDingbats = FALSE) #in cm
 print(p.wm_emmeans)
 dev.off()
-```
-#### Figure 2. Virtual Water Maze Task: Effects of bed rest on pathlength, heading error, and speed on HDT60. Data are means and SE.
-```{r, echo = FALSE, fig.width = 3, fig.height = 3, fig.cap = ""}
-print(p.wm_emmeans)
-```
 
+# Heading error only
+p.wm_emmeans_head_error <- func_plot_bar_facet(subset(emm_fac, .id == "heading_error_z") %>% mutate(.id = fct_relevel(.id,"heading_error_z"),
+                                                       group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")
+                                                       )
+                                    ) 
+
+# Adjust legend size
+p.wm_emmeans_head_error <- p.wm_emmeans_head_error + theme(legend.key.size = unit(0.3, 'cm'))
+
+# Save plot as pdf
+pdf("./Figures/Spatial Cognition 2/p.wm_emmeans_head_error.pdf",
+    width = 10/2.54,
+    height = 8/2.54,
+    useDingbats = FALSE) #in cm
+print(p.wm_emmeans_head_error)
+dev.off()
+```
+```{r fig.id = "tsplot", fig.cap.style = "Image Caption", fig.width = 3, fig.height = 2.5, echo = FALSE, fig.cap = "Virtual Water Maze Task: Effects of HBDR on Pathlength, Heading Error, and Speed on HDT60. Data are means and SE."}
+p.wm_emmeans
+```
+```{r fig.id = "tsplot", fig.cap.style = "Image Caption", fig.width = 1.3, fig.height = 2.5, echo = FALSE, fig.cap = "Virtual Water Maze Task: Effects of HBDR on Heading Error on HDT60. Data are means and SE."}
+p.wm_emmeans_head_error
+```
 # Navigation Strategies Task
-## Descriptive by block
+##Descriptive by block
 ```{r descriptive NavStrat}
 # Compute desc
 desc <- func_desc(df_navstrat, group_3, variable, block, direction)
@@ -769,7 +836,7 @@ p.navstrat_desc <- func_plot_line_facet(desc %>%
 # Adjust legend size
 p.navstrat_desc <- p.navstrat_desc + theme(legend.key.size = unit(0.3, 'cm'))
 ```
-## Mixed Model Comparing Groups
+##Mixed Model Comparing Groups
 ```{r mixed model NavStrat}
 # Mixed Models
 # Add groups
@@ -808,21 +875,17 @@ Parameter_func <- function(dvList){
 Parameter <- Parameter_func(dvList)
 blanks <- rep("", length(Parameter) / length(dvList) - 1)
 Variable <- c("Speed", blanks,"Accuracy", blanks, "Efficiency", blanks)
-tbl_mm_fac_aov_df_navstrat <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(3:5)])
+tbl_mm_fac_aov_df_navstrat <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(2:5)])
 ```
-
-#### Table 6. Mixed Model Summary for Navigation Strategies Task.
-```{r echo = FALSE}
-# Print table
-datatable(tbl_mm_fac_aov_df_navstrat, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns=c("P"), digits = 3) %>%
-  formatRound(columns=c("df2", "F"), digits = 1)
+```{r tab.cap = "Mixed Model Summary for Navigation Strategies Task.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_mm_fac_aov_df_navstrat <- tbl_mm_fac_aov_df_navstrat %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df2", "F"), digits = 1) %>% 
+  colformat_double( j = c("P"), digits = 3 ) 
+# Print
+tbl_mm_fac_aov_df_navstrat
 ```
-
-## Contrasts for Group Comparisons
+##Contrasts for Group Comparisons
 ```{r contrasts between group NavStrat}
 # Run Interaction Contrasts for Trends
 mm_fac <- func_mm_fac_help_nlme(dvList)
@@ -831,7 +894,7 @@ contrasts_mm_fac <- lapply(mm_fac, function(mm_fac)
   contrast(emmeans(mm_fac, ~ block * group_3 | direction),
            interaction = c("poly", "consec"),
            lmer.df = "satterthwaite",
-           adjust="none") 
+           adjust="fdr") 
   )
 # Add 95% CI
 contrasts_mm_fac <- lapply(contrasts_mm_fac, summary, infer = T) #add adj confidence intervals (adjusted if adjustment method is selected: https://cran.r-project.org/web/packages/emmeans/vignettes/confidence-intervals.html)
@@ -864,17 +927,15 @@ tbl_contr_emm_fac_df$Variable <- c("Speed", rep("", 19),
 # Table for contrasts
 tbl_contr_emm_fac_df_navstrat <- tbl_contr_emm_fac_df[c(8, 1:7)]
 ```
-#### Table 7. Mixed Model Group Contrasts for Navigation Strategies Task.
-```{r echo = FALSE}
-# Print table
-datatable(tbl_contr_emm_fac_df_navstrat, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns=c("P (unadjusted)"), digits = 3) %>%
-  formatRound(columns=c("t"), digits = 2)
+```{r tab.cap = "Mixed Model Group Contrasts for Navigation Strategies Task.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_contr_emm_fac_df_navstrat <- tbl_contr_emm_fac_df_navstrat %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df", "t"), digits = 1) %>% 
+  colformat_double( j = c("P (unadjusted)"), digits = 3 ) 
+# Print
+tbl_contr_emm_fac_df_navstrat
 ```
-## Plot Estimated Marignal Means for Group Comparisons
+##Plot Estimated Marignal Means for Group Comparisons
 ```{r plot emmeans by groups and condition NavStrat}
 # Run emmeans
 model_emmeans <- ~ block * group_3 | direction
@@ -926,14 +987,36 @@ pdf("./Figures/Spatial Cognition 2/p.navstrat_emmeans.pdf",
     useDingbats = FALSE) #in cm
 print(p.navstrat_emmeans)
 dev.off()
-```
-#### Figure 3. Navigation Strategies Task: Effects of bed rest on speed, accuracy, and efficiency on HDT60. Data are means and SE.
-```{r, echo = FALSE, fig.width = 6, fig.height = 9, fig.cap = ""}
-print(p.navstrat_emmeans)
-```
 
+# Accuracy only
+p.navstrat_emmeans_acc <- func_plot_line_facet(subset(emm_fac, .id == "accuracy_z") %>%
+                                            mutate(.id = fct_relevel(.id, "rt_z", "accuracy_z", "eff_z"),
+                                              group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")
+                                              )
+                                           ) 
+
+# Adjust legend size
+p.navstrat_emmeans_acc <- p.navstrat_emmeans_acc + theme(legend.key.size = unit(0.3, 'cm'))
+
+# Change axis title
+p.navstrat_emmeans_acc <- p.navstrat_emmeans_acc + labs(y = "", x = "Block", size = 10) 
+
+# Save plot as pdf
+pdf("./Figures/Spatial Cognition 2/p.navstrat_emmeans_acc.pdf",
+    width = 8/2.54,
+    height = 18/2.54,
+    useDingbats = FALSE) #in cm
+print(p.navstrat_emmeans_acc)
+dev.off()
+```
+```{r fig.id = "tsplot", fig.cap.style = "Image Caption", fig.width = 5.5, fig.height = 6, echo = FALSE, fig.cap = "Navigation Strategies Task: Effects of HDBR on Speed, Accuracy, and Efficiency on HDT60. Data are means and SE."}
+p.navstrat_emmeans
+```
+```{r fig.id = "tsplot", fig.cap.style = "Image Caption", fig.width = 5.5, fig.height = 2.5, echo = FALSE, fig.cap = "Navigation Strategies Task: Effects of HDBR on Accuracy on HDT60. Data are means and SE."}
+p.navstrat_emmeans_acc
+```
 # Cognitive Mapping Task
-## Mixed Model Comparing Groups
+##Mixed Model Comparing Groups
 ```{r mixed model CogMap}
 # Compute desc
 desc <- func_desc(df_cogmap_agbresa, group_3, variable)
@@ -968,19 +1051,17 @@ Parameter_func <- function(dvList){
 Parameter <- Parameter_func(dvList)
 blanks <- rep("", length(Parameter) / length(dvList) - 1)
 Variable <- c("Speed", blanks,"Accuracy", blanks, "Efficiency", blanks)
-tbl_mm_fac_aov_df_cogmap <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(3:5)])
+tbl_mm_fac_aov_df_cogmap <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(2:5)])
 ```
-#### Table 8. Mixed Model Summary for Cognitive Mapping Task.
-```{r echo = FALSE}
-# Print table
-datatable(tbl_mm_fac_aov_df_cogmap, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns=c("P"), digits = 3) %>%
-  formatRound(columns=c("df2", "F"), digits = 1)
+```{r tab.cap = "Mixed Model Summary for Cognitive Mapping Task.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_mm_fac_aov_df_cogmap <- tbl_mm_fac_aov_df_cogmap %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df2", "F"), digits = 1) %>% 
+  colformat_double( j = c("P"), digits = 3 ) 
+# Print
+tbl_mm_fac_aov_df_cogmap
 ```
-## Contrasts for Group Comparisons
+##Contrasts for Group Comparisons
 ```{r contrasts between groups CogMap}
 # Contrasts
 # Define model for contrasts
@@ -1001,17 +1082,15 @@ tbl_contr_emm_fac_df$Variable <- c("Speed", rep("", 2),
 # Table for contrasts
 tbl_contr_emm_fac_df_cogmap <- tbl_contr_emm_fac_df[c(7, 2, 6, 3:5)]
 ```
-#### Table 9. Mixed Model Group Contrasts for Cognitive Mapping Task.
-```{r echo = FALSE}
-# Print table
-datatable(tbl_contr_emm_fac_df_cogmap, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns=c("P (unadjusted)"), digits = 3) %>%
-  formatRound(columns=c("t"), digits = 1)
+```{r tab.cap = "Mixed Model Group Contrasts for Cognitive Mapping Task.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_contr_emm_fac_df_cogmap <- tbl_contr_emm_fac_df_cogmap %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df", "t"), digits = 1) %>% 
+  colformat_double( j = c("P (unadjusted)"), digits = 3 ) 
+# Print
+tbl_contr_emm_fac_df_cogmap
 ```
-## Plot Estimated Marignal Means for Group Comparisons
+##Plot Estimated Marignal Means for Group Comparisons
 ```{r plot emmeans by group CogMap}
 # Run emmeans
 emm_fac <- func_emm_fac_nlme(dvList) #requires mm_fac from nlme
@@ -1058,14 +1137,35 @@ pdf("./Figures/Spatial Cognition 2/p.cogmap_emmeans.pdf",
     useDingbats = FALSE) #in cm
 print(p.cogmap_emmeans)
 dev.off()
-```
-#### Figure 4. Cognitive Mapping Task: Effect of bed rest on speed, accuracy, and efficiency on HDT59. Data are means and SE.
-```{r, echo = FALSE, fig.width = 3, fig.height = 3, fig.cap = ""}
-print(p.cogmap_emmeans)
-```
 
+# Accuracy only
+p.cogmap_emmeans_acc <- func_plot_bar_facet(subset(emm_fac, .id == "acc_z") %>% 
+                                       mutate(
+                                         .id = fct_relevel(.id, "acc_z"),
+                                         group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")
+                                         )
+                                     ) 
+
+# Adjust legend size
+p.cogmap_emmeans_acc <- p.cogmap_emmeans_acc + theme(legend.key.size = unit(0.3, 'cm'))
+
+# Save plot as pdf
+pdf("./Figures/Spatial Cognition 2/p.cogmap_emmeans_acc.pdf",
+    width = 3/2.54,
+    height = 8/2.54,
+    useDingbats = FALSE) #in cm
+print(p.cogmap_emmeans_acc)
+dev.off()
+
+```
+```{r fig.id = "tsplot", fig.cap.style = "Image Caption", fig.width = 3, fig.height = 2.5, echo = FALSE, fig.cap = " Cognitive Mapping Task: Effect of HDBR on Speed, Accuracy, and Efficiency on HDT59. Data are means and SE."}
+p.cogmap_emmeans
+```
+```{r fig.id = "tsplot", fig.cap.style = "Image Caption", fig.width = 1.3, fig.height = 2.5, echo = FALSE, fig.cap = " Cognitive Mapping Task: Effect of HDBR on Accuracy on HDT59. Data are means and SE."}
+p.cogmap_emmeans_acc
+```
 # Plus Maze Task
-## Mixed Model Comparing Groups
+##Mixed Model Comparing Groups
 ```{r mixed model PM}
 # Compute desc
 desc <- func_desc(df_pm, group_3, variable)
@@ -1075,8 +1175,8 @@ desc <- func_desc(df_pm, group_3, variable)
 df_tmp <- merge(df_demo, df_pm, by = "id") #add demo
 
 # Select dep vars
-dvList <- c("place_cor_z", "response_cor_z", "switch_cor_z", "reversal_cor_z", "switchtoplace_cor_z", "switchtoresponse_cor_z")
-
+dvList <- c("switch_cor_z", "switchtoplace_cor_z", "switchtoresponse_cor_z",
+            "switch_rt_z", "switchtoplace_rt_z", "switchtoresponse_rt_z")
 # Select predictors
 pred <- c("sex + age + group_3")
 
@@ -1099,20 +1199,18 @@ Parameter_func <- function(dvList){
 # Add variables
 Parameter <- Parameter_func(dvList)
 blanks <- rep("", length(Parameter) / length(dvList) - 1)
-Variable <- c("Place Strategy", blanks,"Response Strategy", blanks, "Switch", blanks, "Reversal", blanks, "S2P", blanks, "S2R", blanks)
+Variable <- c("Switch Acc", blanks, "S2P Acc", blanks, "S2R Acc", blanks, "Switch Speed", blanks, "S2P Speed", blanks, "S2R Speed", blanks)
 tbl_mm_fac_aov_df_pm <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(2:5)])
 ```
-#### Table 10. Mixed Model Summary for virtual Plus Maze Task.
-```{r echo = FALSE}
-# Print table
-datatable(tbl_mm_fac_aov_df_pm, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns=c("P"), digits = 3) %>%
-  formatRound(columns=c("df2", "F"), digits = 1)
+```{r tab.cap = "Mixed Model Summary for virtual Plus Maze Task.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_mm_fac_aov_df_pm <- tbl_mm_fac_aov_df_pm %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df2", "F"), digits = 1) %>% 
+  colformat_double( j = c("P"), digits = 3 ) 
+# Print
+tbl_mm_fac_aov_df_pm
 ```
-## Contrasts for Group Comparisons
+##Contrasts for Group Comparisons
 ```{r contrasts between groups PM}
 # Contrasts
 # Define model for contrasts
@@ -1126,34 +1224,34 @@ factors <- c()
 tbl_contr_emm_fac_df <- func_tbl_contr_emm_fac_nlme(dvList)
 
 # Create vars to make nice table
-tbl_contr_emm_fac_df$Variable <- c("Place Strategy", rep("", 2),
-                                   "Response Strategy", rep("", 2),
-                                   "Switch", rep("", 2),
-                                   "Reversal", rep("", 2),
-                                   "S2P", rep("", 2),
-                                   "S2R", rep("", 2))
+tbl_contr_emm_fac_df$Variable <- c(
+                                   "Switch Acc", rep("", 2),
+                                   "S2P Acc", rep("", 2),
+                                   "S2R Acc", rep("", 2),
+                                   "Switch Speed", rep("", 2),
+                                   "S2P Speed", rep("", 2),
+                                   "S2R Speed", rep("", 2))
 
 # Table for contrasts
-tbl_contr_emm_fac_df_sot <- tbl_contr_emm_fac_df[c(7, 2, 6, 3:5)]
+tbl_contr_emm_fac_df_pm <- tbl_contr_emm_fac_df[c(7, 2, 6, 3:5)]
 ```
-#### Table 11. Mixed Model Group Contrasts for virtual Plus Maze Task.
-```{r echo = FALSE}
-# Print table
-datatable(tbl_contr_emm_fac_df_sot, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns=c("P (unadjusted)"), digits = 3) %>%
-  formatRound(columns=c("t"), digits = 2)
+```{r tab.cap = "Mixed Model Group Contrasts for virtual Plus Maze Task.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_contr_emm_fac_df_pm <- tbl_contr_emm_fac_df_pm %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df", "t"), digits = 1) %>% 
+  colformat_double( j = c("P (unadjusted)"), digits = 3 ) 
+# Print
+tbl_contr_emm_fac_df_pm
 ```
-## Plot Estimated Marignal Means for Group Comparisons
+##Plot Estimated Marignal Means for Group Comparisons
 ```{r plot emmeans by group PM}
 # Run emmeans
 emm_fac <- func_emm_fac_nlme(dvList) #requires mm_fac from nlme
 
 # New facet label names for variable
-new_labels <- c("Place Strategy", "Response Strategy", "Switch", "Reversal", "S2P", "S2R")
-names(new_labels) <- c("place_cor_z", "response_cor_z", "switch_cor_z", "reversal_cor_z", "switchtoplace_cor_z", "switchtoresponse_cor_z")
+new_labels <- c("Switch Acc","S2P Acc", "S2R Acc", "Switch Speed","S2P Speed", "S2R Speed")
+names(new_labels) <- c("switch_cor_z", "switchtoplace_cor_z", "switchtoresponse_cor_z",
+                       "switch_rt_z", "switchtoplace_rt_z", "switchtoresponse_rt_z")
 
 # Define aes for func_plot
 tmpaes_plot <- aes(x = group_3, y = emmean,
@@ -1175,6 +1273,7 @@ labeller_def <- labeller(.id = new_labels)
 facet_grid_def <- facet_wrap(~ .id,
                              switch = "y",
                              labeller = labeller_def,
+                             scales = "fixed",
                              ncol = 2) 
 
 facet_grid_def <- facet_wrap(~ .id,
@@ -1184,7 +1283,8 @@ facet_grid_def <- facet_wrap(~ .id,
 # Draw plot
 pd <- position_dodge(0.1)
 p.pm_emmeans <- func_plot_bar_facet(emm_fac %>% 
-                                      mutate(.id = fct_relevel(.id, "place_cor_z", "response_cor_z", "switch_cor_z", "reversal_cor_z", "switchtoplace_cor_z", "switchtoresponse_cor_z"),
+                                      mutate(.id = fct_relevel(.id, "switch_cor_z", "switchtoplace_cor_z", "switchtoresponse_cor_z",
+                       "switch_rt_z", "switchtoplace_rt_z", "switchtoresponse_rt_z"),
                                          group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")
                                          )
                                     ) 
@@ -1199,14 +1299,33 @@ pdf("./Figures/Spatial Cognition 2/p.pm_emmeans.pdf",
     useDingbats = FALSE) #in cm
 print(p.pm_emmeans)
 dev.off()
-```
-#### Figure 5. Plus Maze Task: Effect of bed rest on lace Strategy, Response Strategy, Switch, Reversal, Switch to Place (S2P), Switch to Response (S2R) on R+1. Data are means and SE.
-```{r, echo = FALSE, fig.width = 5, fig.height = 6, fig.cap = ""}
-print(p.pm_emmeans)
-```
 
+# Switch to place only
+p.pm_emmeans_s2p <- func_plot_bar_facet(subset(emm_fac, .id == "switchtoplace_cor_z") %>% 
+                                      mutate(.id = fct_relevel(.id,  "switchtoplace_cor_z"),
+                                         group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")
+                                         )
+                                    ) 
+
+# Adjust legend size
+p.pm_emmeans_s2p <- p.pm_emmeans_s2p + theme(legend.key.size = unit(0.3, 'cm'))
+
+# Save plot as pdf
+pdf("./Figures/Spatial Cognition 2/p.pm_emmeans_s2p.pdf",
+    width = 10/2.54,
+    height = 6/2.54,
+    useDingbats = FALSE) #in cm
+print(p.pm_emmeans_s2p)
+dev.off()
+```
+```{r fig.id = "tsplot", fig.cap.style = "Image Caption", fig.width = 3, fig.height = 4, echo = FALSE, fig.cap = "Plus Maze Task: Effect of bed rest on Place Strategy, Response Strategy, Switch, Reversal, Switch to Place (S2P), Switch to Response (S2R) on R+1. Data are means and SE."}
+p.pm_emmeans
+```
+```{r fig.id = "tsplot", fig.cap.style = "Image Caption", fig.width = 1.3, fig.height = 2.5, echo = FALSE, fig.cap = "Plus Maze Task: Effect of bed rest on Accuracy and Speed for Switch to Place (S2P) Trials on R+1. Data are means and SE."}
+p.pm_emmeans_s2p
+```
 # Navigation Search VR
-## Plot Time Course adjusted for Baseline 
+##Plot Time Course adjusted for Baseline 
 ```{r plot time course adjusted for baseline NAVIS VR}
 # Compute desc
 desc <- func_desc(df_navis_vr, group_3, cond.f, time.f, variable)
@@ -1216,8 +1335,8 @@ desc <- subset(desc, variable != "acc_z" & variable != "time_to_first_revisit_z"
 
 # Plot desc 
 # New facet label names for variable
-new_labels <- c("Speed","Distance","Revisits")
-names(new_labels) <- c("rt_z","total_distance_z","total_revisits_z")
+new_labels <- c("Speed", "Accuracy", "Distance")
+names(new_labels) <- c("rt_z","total_revisits_z", "total_distance_z")
 
 new_labels2 <- c("Day", "Night")
 names(new_labels2) <- c("Day", "Night")
@@ -1243,7 +1362,7 @@ facet_grid_def <- facet_grid(variable ~ cond.f,
 # Draw plot
 pd <- position_dodge(0.3)
 p.navis_vr_desc <- func_plot_line_facet(desc %>%
-                                          mutate(variable = fct_relevel(variable, "rt_z", "total_distance_z", "total_revisits_z"),
+                                          mutate(variable = fct_relevel(variable, "rt_z", "total_revisits_z", "total_distance_z"),
                                             group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")
                                             )
                                         ) +
@@ -1252,7 +1371,7 @@ p.navis_vr_desc <- func_plot_line_facet(desc %>%
 # Adjust legend size
 p.navis_vr_desc <- p.navis_vr_desc + theme(legend.key.size = unit(0.3, 'cm'))
 ```
-## Mixed Model for Group x Time Interaction
+##Mixed Model for Group x Time Interaction
 ```{r mixed model NAVIS VR}
 # Mixed Models
 # Add baseline as cov
@@ -1260,7 +1379,7 @@ bdc <- "BDC-6"
 df_tmp <-  func_bdc_cov(df_navis_vr)
 
 # Select dep vars
-dvList <- c("rt_z","total_distance_z","total_revisits_z")
+dvList <- c("rt_z", "total_revisits_z", "total_distance_z")
 
 # Define model
 model_mm <- paste0(" + sex"," + age", " + time.f", "* group_3", " * cond.f", " + (1|id)" )
@@ -1290,20 +1409,18 @@ Parameter_func <- function(dvList){
 # Add variables
 Parameter <- Parameter_func(dvList)
 blanks <- rep("", length(Parameter) / length(dvList) - 1)
-Variable <- c("Speed", blanks, "Distance", blanks, "Revisits", blanks)
+Variable <- c("Speed", blanks, "Accuracy", blanks, "Distance", blanks)
 tbl_mm_fac_aov_df_navis_vr <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
 ```
-#### Table 12. Mixed Model Summary for Navigation Search Task VR.
-```{r echo = FALSE}
-# Print table
-datatable(tbl_mm_fac_aov_df_navis_vr, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns=c("P"), digits = 3) %>%
-  formatRound(columns=c("df2", "F"), digits = 1)
+```{r tab.cap = "Mixed Model Summary for Navigation Search Task VR.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_mm_fac_aov_df_navis_vr <- tbl_mm_fac_aov_df_navis_vr %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df2", "F"), digits = 1) %>% 
+  colformat_double( j = c("P"), digits = 3 ) 
+# Print
+tbl_mm_fac_aov_df_navis_vr
 ```
-## Contrasts for Group Comparisons at Each Timepoint
+##Contrasts for Group Comparisons at Each Timepoint
 ```{r contrasts between groups by time NAVIS VR}
 # Contrasts
 # Define model for contrasts
@@ -1324,11 +1441,11 @@ tmp_n_cond <- length(levels(tbl_contr_emm_fac_df$Contrast)) *
   length(levels(tbl_contr_emm_fac_df$time.f)) - 1
 tmp_n_time <- length(levels(tbl_contr_emm_fac_df$Contrast)) - 1
 
-Variable <- c("Speed", blanks, "Distance", blanks, "Revisits", blanks)
+Variable <- c("Speed", blanks, "Accuracy", blanks, "Distance", blanks)
 
 tbl_contr_emm_fac_df$Variable <- c("Speed", rep("", tmp_n_dvs),
-                                   "Distance", rep("", tmp_n_dvs),
-                                   "Revisits", rep("", tmp_n_dvs))
+                                   "Accuracy", rep("", tmp_n_dvs),
+                                   "Distance", rep("", tmp_n_dvs))
 
 tbl_contr_emm_fac_df$Condition <- rep ( c("Day", rep("", tmp_n_cond),
                                           "Night",rep("", tmp_n_cond)),
@@ -1338,20 +1455,20 @@ tbl_contr_emm_fac_df$Time <- rep ( c("R+1", rep("", tmp_n_time),
                                      "R+12", rep("", tmp_n_time)),
                                    length(dvList) )
 
+tbl_contr_emm_fac_df_navis_vr <- tbl_contr_emm_fac_df
 #table_contrasts_emm_fac_by_time_df$Contrast <- rep(c("cAG vs. CTRL","iAG vs. CTRL", "cAG vs. iAG"), length(dvList))
 ```
-#### Table 13. Mixed Model Group Contrasts for Navigation Search Task VR.
-```{r echo = FALSE}
-# Table for contrasts
-tbl_contr_emm_fac_df_navis_vr <- tbl_contr_emm_fac_df[c(9:11, 2, 8, 5:7)]
-datatable(tbl_contr_emm_fac_df_navis_vr, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns=c("P (unadjusted)"), digits = 3) %>%
-  formatRound(columns=c("t"), digits = 2)
+<!---BLOCK_LANDSCAPE_START--->
+```{r tab.cap = "Mixed Model Group Contrasts for Navigation Search Task VR.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_contr_emm_fac_df_navis_vr <- tbl_contr_emm_fac_df_navis_vr %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df", "t"), digits = 1) %>% 
+  colformat_double( j = c("P (unadjusted)"), digits = 3 ) 
+# Print
+tbl_contr_emm_fac_df_navis_vr
 ```
-## Plot Estimated Marignal Means for Group x Time Comparisons
+<!---BLOCK_LANDSCAPE_STOP--->
+##Plot Estimated Marignal Means for Group x Time Comparisons
 ```{r plot emmeans by group and time NAVIS VR}
 # Define model for emmeans
 model_emmeans <- ~ time.f * group_3 * cond.f
@@ -1361,7 +1478,7 @@ emm_fac <- func_emm_fac_with_bdc_adj(dvList)
 
 # Plot emmeans 
 # New facet label names for variable
-new_labels <- c("Speed", "Distance", "Revisits")
+new_labels <- c("Speed", "Accuracy", "Distance")
 names(new_labels) <- dvList
 
 new_labels2 <- c("Day", "Night")
@@ -1383,26 +1500,27 @@ labeller_def <- labeller(.id = new_labels,
 
 facet_grid_def <- facet_grid(.id ~ cond.f,
                              switch = "y",
+                             scales = "fixed",
                              labeller = labeller_def) 
 
 # Draw plot
 pd <- position_dodge(0.3)
 p.navis_vr_emmeans <- func_plot_line_facet(emm_fac %>% 
-                                             mutate(.id = fct_relevel(.id, "rt_z", "total_distance_z", "total_revisits_z"),
+                                             mutate(.id = fct_relevel(.id, "rt_z", "total_revisits_z", "total_distance_z"),
                                                group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG"))) +
   geom_hline(yintercept = 0, size = 0.3, linetype = "dotted")
 
 # Adjust legend size
 p.navis_vr_emmeans <- p.navis_vr_emmeans + theme(legend.key.size = unit(0.3, 'cm'))
 ```
-## Mixed Model assessing Main Effect of Bed Rest
+##Mixed Model assessing Main Effect of Bed Rest
 ```{r compute mixed model for main effect NAVIS VR}
 # Drop recovery
 df_tmp <- subset(df_tmp, time.f !="R+12") # Drop baseline
 df_tmp <- droplevels(df_tmp)
 
 # Select dep vars
-dvList <- c("rt_z","total_distance_z","total_revisits_z")
+dvList <- c("rt_z","total_revisits_z","total_distance_z")
 
 # Define model
 model_mm <- paste0(" + sex"," + age", " + group_3", " * cond.f", " + (1|id)" )
@@ -1428,20 +1546,18 @@ Parameter_func <- function(dvList){
 # Add variables
 Parameter <- Parameter_func(dvList)
 blanks <- rep("", length(Parameter) / length(dvList) - 1)
-Variable <- c("Speed", blanks, "Distance", blanks, "Revisits", blanks)
+Variable <- c("Speed", blanks, "Accuracy", blanks, "Distance", blanks)
 tbl_mm_fac_aov_df_navis_vr_main <- cbind(Variable, Parameter, tbl_mm_fac_aov_df[c(4:7)])
 ```
-#### Table 14. Mixed Model Summary for Navigation Search Task VR.
-```{r echo = FALSE}
-# Print ANOVA table
-datatable(tbl_mm_fac_aov_df_navis_vr_main, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns=c("P"), digits = 3) %>%
-  formatRound(columns=c("df2", "F"), digits = 1)
+```{r tab.cap = "Mixed Model Summary for Navigation Search Task VR.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_mm_fac_aov_df_navis_vr_main <- tbl_mm_fac_aov_df_navis_vr_main %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df2", "F"), digits = 1) %>% 
+  colformat_double( j = c("P"), digits = 3 ) 
+# Print
+tbl_mm_fac_aov_df_navis_vr_main
 ```
-## Contrasts for Group Comparisons
+##Contrasts for Group Comparisons
 ```{r contrasts between groups main effect NAVIS VR}
 # Define model for emmeans
 model_emmeans <- ~ group_3 * cond.f
@@ -1466,8 +1582,8 @@ tmp_n_cond <- length(levels(tbl_contr_emm_fac_df$Contrast)) - 1
 
 
 tbl_contr_emm_fac_df$Variable <- c("Speed", rep("", tmp_n_dvs),
-                                   "Distance", rep("", tmp_n_dvs),
-                                   "Revisits", rep("", tmp_n_dvs))
+                                   "Accuracy", rep("", tmp_n_dvs),
+                                   "Distance", rep("", tmp_n_dvs))
 
 tbl_contr_emm_fac_df$Condition <- rep ( c("Day", rep("", tmp_n_cond),
                                           "Night",rep("", tmp_n_cond)),
@@ -1478,20 +1594,25 @@ tbl_contr_emm_fac_df$Condition <- rep ( c("Day", rep("", tmp_n_cond),
 # Table for contrasts
 tbl_contr_emm_fac_navis_vr_main <- tbl_contr_emm_fac_df[c(8:9, 2, 7,4:6)]
 ```
-#### Table 15. Mixed Model Group Contrasts for Navigation Search task VR. Data are adjusted for baseline.
-```{r echo = FALSE}
-# Print Contrast table
-datatable(tbl_contr_emm_fac_navis_vr_main, 
-          rownames = FALSE, filter = "top",
-          options = list(pageLength = 50, 
-                         scrollX = T)) %>%
-  formatRound(columns=c("P (unadjusted)"), digits = 3) %>%
-  formatRound(columns=c("t"), digits = 2)
+```{r tab.cap = "Mixed Model Group Contrasts for Navigation Search task VR. Data are adjusted for baseline.", tab.topcaption = TRUE, echo = FALSE}
+# Convert to word flextable
+tbl_contr_emm_fac_navis_vr_main <- tbl_contr_emm_fac_navis_vr_main %>% flextable() %>% autofit() %>% 
+  colformat_double( j = c("df", "t"), digits = 1) %>% 
+  colformat_double( j = c("P (unadjusted)"), digits = 3 ) 
+# Print
+tbl_contr_emm_fac_navis_vr_main
 ```
-## Compute and Plot Estimated Marignal Means to Compare Groups
+##Compute and Plot Estimated Marignal Means to Compare Groups
 ```{r plot emmeans by group NAVIS VR}
+# New facet label names for variable
+new_labels <- c("Speed", "Accuracy","Distance")
+names(new_labels) <- c("rt_z", "total_revisits_z", "total_distance_z")
+
+new_labels2 <- c("Day", "Night")
+names(new_labels2) <- c("Day", "Night")
+
 # Define aes for func_plot
-tmpaes_plot <- aes(x = contrast,
+tmpaes_plot <- aes(x = cond.f,
                    y = emmean,
                    group = group_3,
                    fill = group_3,
@@ -1505,13 +1626,6 @@ tmpaes_geombar <- aes(x = cond.f,
                     y = emmean, 
                     fill=group_3)
 
-# New facet label names for variable
-new_labels <- c("Speed","Distance","Revisits")
-names(new_labels) <- c("rt_z","total_distance_z","total_revisits_z")
-
-new_labels2 <- c("Day", "Night")
-names(new_labels2) <- c("Day", "Night")
-
 # Define labels for func_plot_line_facet
 labeller_def <- labeller(.id = new_labels,
                                    cond.f = new_labels2)
@@ -1520,11 +1634,10 @@ facet_grid_def <- facet_grid(.id ~ cond.f,
                              switch = "y",
                              scales = "free",
                              labeller = labeller_def) 
-
 # Draw Plot 
 pd <- position_dodge(0.99)
 p.navis_vr_emmeans_main <- func_plot_bar_facet(emm_fac %>%
-                                                 mutate(.id = fct_relevel(.id, "rt_z", "total_distance_z", "total_revisits_z"),
+                                                 mutate(.id = fct_relevel(.id, "rt_z", "total_revisits_z", "total_distance_z"),
                                                    group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")
                                                    )
                                                )
@@ -1540,19 +1653,39 @@ pdf("./Figures/Spatial Cognition 2/p.navis_vr_emmeans_main.pdf",
     useDingbats = FALSE) #in cm
 print(p.navis_vr_emmeans_main)
 dev.off()
-```
-#### Figure 6. Navigation Search Task VR: Effect of bed rest on speed, distance traveled, and total speed on R+1. Data are means and SE adjusted for baseline.
-```{r, echo = FALSE, fig.width = 3, fig.height = 8, fig.cap = ""}
-print(p.navis_vr_emmeans_main)
-```
 
-## Create Combined plot 
+# Night only
+p.navis_vr_emmeans_main_night <- func_plot_bar_facet(subset(emm_fac, cond.f == "Night") %>%
+                                                 mutate(.id = fct_relevel(.id, "rt_z", "total_revisits_z", "total_distance_z"),
+                                                   group_3 = fct_relevel(group_3, "CTRL", "cAG", "iAG")
+                                                   )
+                                               )
+
+
+# Adjust legend size
+p.navis_vr_emmeans_main_night <- p.navis_vr_emmeans_main_night + theme(legend.key.size = unit(0.3, 'cm'))
+
+# Save plot as pdf
+pdf("./Figures/Spatial Cognition 2/p.navis_vr_emmeans_main_night.pdf",
+    width = 4/2.54,
+    height = 18/2.54,
+    useDingbats = FALSE) #in cm
+print(p.navis_vr_emmeans_main_night)
+dev.off()
+```
+```{r fig.id = "tsplot", fig.cap.style = "Image Caption", fig.width = 3, fig.height = 5, echo = FALSE, fig.cap = "NAVIS VR: Effect of HDBR on Speed, Accuracy, and Distance traveled on R+1."}
+p.navis_vr_emmeans_main
+```
+```{r fig.id = "tsplot", fig.cap.style = "Image Caption", fig.width = 3, fig.height = 5, echo = FALSE, fig.cap = "NAVIS VR: Effect of HDBR on Speed, Accuracy, and Distance traveled on R+1."}
+p.navis_vr_emmeans_main_night
+```
+##Create Combined plot 
 ```{r combined plot NAVIS VR}
 # Combine plot
 p.navis_vr_comb <- plot_grid(p.navis_vr_desc, p.navis_vr_emmeans_main + rremove("x.text") + theme(legend.key.size = unit(0.3, 'cm')),
           labels = c("a", "b"),
           ncol = 2, nrow = 1,
-          rel_widths = c(2, 1))
+          rel_widths = c(1, 1))
 
 p.navis_vr_comb <- p.navis_vr_comb + theme(legend.key.size = unit(0.3, 'cm'))
 
@@ -1564,6 +1697,52 @@ pdf("./Figures/Spatial Cognition 2/p.navis_vr_comb.pdf",
 print(p.navis_vr_comb)
 dev.off()
 ```
-```{r, echo = FALSE, fig.width = 8, fig.height = 8, fig.cap = "Figure NAVIS VR: Effect of bed rest on speed, distance traveled, and total speed on R+1."}
-print(p.navis_vr_comb)
+##Create Summary Combined plot 
+```{r combined plot summary}
+library(gridExtra)
+library(grid)
+#p.sot_emmeans_acc
+#p.cogmap_emmeans_acc
+#p.wm_emmeans_head_error
+#p.pm_emmeans_s2p
+#p.navis_vr_emmeans_main_night
+#p.navstrat_emmeans_acc
+# Combine plot
+# p.navis_vr_emmeans_main_night, , p.navstrat_emmeans_acc
+#grid.arrange(p.wm_emmeans_head_error, p.wm_emmeans_head_error, nrow = 1)
+library(gtable)
+#g2 <- ggplotGrob(p.sot_emmeans_acc)
+#g3 <- ggplotGrob(p.cogmap_emmeans_acc)
+#g <- rbind(g2, g3, size = "first")
+#g$widths <- unit.pmax(g2$widths, g3$widths)
+#grid.newpage()
+#grid.draw(g)
+
+#p.spacog2_comb <- ggarrange(p.sot_emmeans_acc,
+ #         p.cogmap_emmeans_acc,
+  #        p.wm_emmeans_head_error,
+   #       p.pm_emmeans_s2p,
+    #      p.navis_vr_emmeans_main_night,
+     #     p.navstrat_emmeans_acc,
+      #    widths = c(1,1,1,1,2,2))
+#p.spacog2_comb <- plot_grid(p.wm_emmeans_head_error + p.wm_emmeans_head_error+rremove("x.text") + theme(legend.key.size = unit(0.3, 'cm')),
+#          labels = c("a", "b", "c"),
+ #         ncol = 2, nrow = 1,
+  #        rel_widths = c(1, 1))
+
+#p.spacog2_comb <- p.spacog2_comb + theme(legend.key.size = unit(0.3, 'cm'))
+
+# Save plot as pdf
+#pdf("./Figures/Spatial Cognition 2/p.spacog2_comb.pdf",
+ #   width = 30/2.54,
+  #  height = 20/2.54,
+   # useDingbats = FALSE) #in cm
+#print(p.spacog2_comb)
+#dev.off()
 ```
+```{r fig.id = "tsplot", fig.cap.style = "Image Caption", fig.width = 3, fig.height = 5, echo = FALSE, fig.cap = "Spatial Cognition: Effect of HDBR on Spatial Cognition."}
+#p.spacog2_comb
+```
+
+
+

@@ -26,30 +26,6 @@ library(qdapTools) # list_df2df(tbl_mm_fac_aov)
 ```{r print R and package versions}
 print(sessionInfo())
 ```
-# Definition of Helper Functions 
-## Descriptive Functions
-```{r functions for descriptive stats}
-# Function to compute descriptives
-func_desc <- function(data, ...) {
-  df_tmp <- df_demo[ , !names(df_demo) %in% c("age","height", "weight")]
-  data <- merge(df_tmp, data, by = "id") #add demo
-  data <- reshape2::melt( data, 
-                              id.vars = names( Filter(is.factor, data) )
-                              )
-  groups <- enquos(...)
-  
-  result <- data %>%
-    
-    group_by(!!!groups) %>%
-    
-    dplyr::summarise(
-      MEAN = mean(value, na.rm = T),
-      SE = sd(value, na.rm = T) / sqrt(length(value) )
-      )
-  return(result)
-}
-```
-
 ## Load Data
 ```{r load data}
 #  Demographics
@@ -127,11 +103,17 @@ df_dual[c(1:2,6)] <- lapply(df_dual[c(1:2,6)], as.factor)
 df_switch <- read_excel("./Data/Data Executive Control prout.xlsx", sheet = "Data Switch prout")
 df_switch[c(1:2,6)] <- lapply(df_switch[c(1:2,6)], as.factor)
 
+
 # Cognition 
 
 # Cognition Avr prout
 df_cognition_avr <- read_excel("./Data/Data Cognition Avr prout.xlsx", sheet = "Data Cognition Avr prout")
 df_cognition_avr[c(1:2)] <- lapply(df_cognition_avr[c(1:2)], as.factor)
+
+# Add time.n
+df_cognition_avr$time.n <- plyr::revalue(df_cognition_avr$time.f, c("BDC-9" = "1", "BDC-7" = "2", "BDC-6" = "3", "HDT1" = "4", "HDT3" = "5", "HDT5" = "6", "HDT14" = "7", "HDT28" = "8", "HDT42" = "9", "HDT57" = "10", "R+1" = "11", "R+5" = "12", "R+12" = "13"))
+df_cognition_avr$time.n <- as.character((df_cognition_avr$time.n))
+df_cognition_avr$time.n <- as.numeric((df_cognition_avr$time.n))
 
 # Cognition
 df_cognition <- read_excel("./Data/Data Cognition.xlsx", sheet = "Data Cognition")
@@ -151,7 +133,7 @@ names(df_cognition)[names(df_cognition) == "NBCK_Av_pCorr"] <- "NBCK_pCorr"
 #colnames(df_cognition)[c(4:ncol(df_cognition))] <- paste(colnames(df_cognition[c(4:ncol(df_cognition))]), "z", sep = "_")
 
 # Add time.n
-df_cognition$time.n <- plyr::revalue(df_cognition$time.f, c("BDC-9" = "01", "BDC-7" = "02", "BDC-6" = "03", "HDT1" = "04", "HDT3" = "05", "HDT5" = "06", "HDT14" = "07", "HDT28" = "08", "HDT42" = "09", "HDT57" = "10", "R+1" = "11", "R+5" = "12", "R+12" = "13"))
+df_cognition$time.n <- plyr::revalue(df_cognition$time.f, c("BDC-9" = "1", "BDC-7" = "2", "BDC-6" = "3", "HDT1" = "4", "HDT3" = "5", "HDT5" = "6", "HDT14" = "7", "HDT28" = "8", "HDT42" = "9", "HDT57" = "10", "R+1" = "11", "R+5" = "12", "R+12" = "13"))
 #df_cognition <- df_cognition[c(1:3, 34, 4:33)]
 df_cognition$time.n <- as.character((df_cognition$time.n))
 df_cognition$time.n <- as.numeric((df_cognition$time.n))
@@ -159,6 +141,7 @@ df_cognition$time.n <- as.numeric((df_cognition$time.n))
 # Clean
 df_cognition <- df_cognition[c(1,3, 34, 4:33)]
 ```
+# Definition of Helper Functions 
 # Function summary stats
 ```{r summary functions}
 # Add grand means to df
@@ -182,99 +165,80 @@ func_gm <- function(data, ...) {
   return(df_gm)
 } 
 
-# Compute mean hdt
-func_mean_hdt_spacog_1 <- function(data) {
+# Function mean bdc
+func_mean_bdc <- function(data,...) {
   
   df_tmp <- reshape2::melt(data, 
-                              id.vars = c("id", "time.f", "task") ) 
-  #df_mean_hdt <- subset(df_tmp, time.f != pre_hdt & time.f != post_hdt)
-  df_mean_hdt <- droplevels(df_tmp) %>%
-    
-    group_by(id, variable, task) %>%
-    dplyr::summarise(
-      value = ( (value[time.f == "HDT2"] + value[time.f == "HDT30"] + value[time.f == "HDT59"]) / 3)
-      )
-  df_mean_hdt$value_type <- as.factor ( c( rep ("hdt_mean", nrow(df_mean_hdt) ) ) ) # Add id var for task
+                              id.vars = id_vars ) %>%
+    droplevels()
   
-  df_mean_hdt_bdc_adj <- droplevels(df_tmp) %>%
+  df_mean_bdc <- df_tmp %>%
     
-    group_by(id, variable, task) %>%
-    dplyr::summarise(
-      value = ( (value[time.f == "HDT2"] + value[time.f == "HDT30"] + value[time.f == "HDT59"]) / 3) - value[time.f == "BDC-3"] 
-  )
-  df_mean_hdt_bdc_adj$value_type <- as.factor ( c( rep ("hdt_mean_bdc_adj", nrow(df_mean_hdt) ) ) ) # Add id var for task
+    filter(time.n < (time.n_bdc + 1) )
   
-  df_mean_hdt <- rbind(df_mean_hdt, df_mean_hdt_bdc_adj)
-  df_mean_hdt <- reshape2::dcast(df_mean_hdt, id + task + value_type ~ variable, value.var = "value")
-  return(df_mean_hdt)
-} 
+  groups <- enquos(...)
+  
+  df_mean_bdc <- df_mean_bdc %>%
+    
+    group_by(!!!groups) %>%
+    
+    dplyr::summarise(
+      mean_bdc = mean(value, na.rm = T)
+    )
+  return(df_mean_bdc)
+}
 
-
-func_hdt_mean_cognition <- function(data) {
+# Function mean hdt
+func_mean_hdt <- function(data,...) {
   
-  df_tmp <- reshape2::melt(data, 
-                              id.vars = c("id", "time.f", "task") ) 
-  #df_mean_hdt <- subset(df_tmp, time.f != pre_hdt & time.f != post_hdt)
-  df_mean_hdt <- droplevels(df_tmp) %>%
+  df_mean_hdt <- reshape2::melt(data, 
+                              id.vars = id_vars ) %>%
+    droplevels()
+  
+  df_mean_hdt <- df_mean_hdt %>%
     
-    group_by(id, variable, task) %>%
-    dplyr::summarise(
-      value = ( (value[time.f == "HDT1"] + value[time.f == "HDT3"] + value[time.f == "HDT5"] + value[time.f == "HDT14"] + value[time.f == "HDT28"] + value[time.f == "HDT42"] + value[time.f == "HDT57"]) / 7 )
-      )
-  df_mean_hdt$value_type <- as.factor ( c( rep ("hdt_mean", nrow(df_mean_hdt) ) ) ) # Add id var for task
-  
-  df_mean_hdt_bdc_adj <- droplevels(df_tmp) %>%
+    filter(time.n > time.n_bdc & time.n < time.n_rec)
     
-    group_by(id, variable, task) %>%
-    dplyr::summarise(
-      value = 
-          ( (value[time.f == "HDT1"] + value[time.f == "HDT3"] + value[time.f == "HDT5"] + value[time.f == "HDT14"] + value[time.f == "HDT28"] + value[time.f == "HDT42"] + value[time.f == "HDT57"]) / 7 ) -
-          ( (value[time.f == "BDC-9"] + value[time.f == "BDC-7"] + value[time.f == "BDC-7"]) / 3)
-      )
-  df_mean_hdt_bdc_adj$value_type <- as.factor ( c( rep ("hdt_mean_bdc_adj", nrow(df_mean_hdt) ) ) ) # Add id var for task
+    groups <- enquos(...)
   
-  df_mean_hdt <- rbind(df_mean_hdt, df_mean_hdt_bdc_adj)
-  df_mean_hdt <- reshape2::dcast(df_mean_hdt, id + task + value_type ~ variable, value.var = "value")
+  df_mean_hdt <- df_mean_hdt %>%
+  
+    group_by(!!!groups) %>%
+    #group_by(id, variable, task) %>%
+    
+    dplyr::summarise(
+      mean_hdt = mean(value, na.rm = T)
+    )
+  df_mean_hdt <- merge( df_mean_hdt, df_mean_bdc, by = c(id_vars_merge) )
+  df_mean_hdt$hdt_mean_bdc_adj <- df_mean_hdt$mean_hdt - df_mean_hdt$mean_bdc
+  df_mean_hdt <- df_mean_hdt[-c(4)]
+  df_mean_hdt <- reshape2::melt(df_mean_hdt, 
+                              id.vars = c(id_vars_merge) )
   return(df_mean_hdt)
 }
 
-
-# Compute change scores
-func_changescore <- function(data) {
+# Compute change scores 
+func_changescore <- function(data,...) {
   
   df_tmp <- reshape2::melt(data, 
-                              id.vars = c("id", "time.f", "task") ) 
+                              id.vars = id_vars ) 
  
-  df_changescore <- subset(df_tmp, time.f == pre_changescore | time.f == post_changescore)
-  df_changescore <- droplevels(df_changescore) %>%
+  #df_changescore <- subset(df_tmp, time.f == pre_changescore | time.f == post_changescore)
+  #df_changescore <- droplevels(df_changescore) 
 
-    group_by(id, variable, task) %>%
+  groups <- enquos(...)
+  
+  df_changescore <- df_tmp %>%
+  
+    group_by(!!!groups) %>%
+  
+    #group_by(id, variable, task) %>%
     dplyr::summarise(
       value = value[time.f == post_changescore] - value[time.f == pre_changescore])
   df_changescore$value_type <- as.factor ( c( rep ("change_score", nrow(df_changescore) ) ) ) # Add id var for task
-  df_changescore <- reshape2::dcast(df_changescore, id + task + value_type ~ variable, value.var = "value")
-  
-  return(df_changescore)
-} 
 
-func_changescore_cognition <- function(data) {
-  
-  df_tmp <- reshape2::melt(data, 
-                              id.vars = c("id", "time.f", "task") ) 
- 
-  #df_changescore <- subset(df_tmp, time.f == pre_changescore | time.f == post_changescore)
-  df_changescore <- droplevels(df_tmp) %>%
-
-    group_by(id, variable, task) %>%
-    dplyr::summarise(
-      value = value[time.f == "HDT57"] - (value[time.f == "BDC-9"] + value[time.f == "BDC-7"] + value[time.f == "BDC-6"])
-      )
-  df_changescore$value_type <- as.factor ( c( rep ("change_score", nrow(df_changescore) ) ) ) # Add id var for task
-  df_changescore <- reshape2::dcast(df_changescore, id + task + value_type ~ variable, value.var = "value")
-  
   return(df_changescore)
 }
-
 
 # slope cognition
 func_data_slope_cognition <- function(data, ...) {
@@ -300,10 +264,10 @@ func_data_slope_cognition <- function(data, ...) {
 # Spatial Cognition Battery 1
 ```{r spacog_1}
 # Define primary outcomes
-df_pto_v1 <- df_pto[-c(3)] 
-df_pto_v2 <- df_pto[-c(5)] 
-colnames(df_pto_v2)[3] <- "acc_z"
-df_pto_v2$eff_z <- (df_pto_v2$rt_z + df_pto_v2$acc_z) / 2
+df_pto_v1 <- df_pto[-c(3,4)] 
+#df_pto_v2 <- df_pto[-c(5)] 
+#colnames(df_pto_v2)[3] <- "acc_z"
+df_pto_v1$eff_z <- (df_pto_v1$rt_z + df_pto_v1$acc_z) / 2
   
 df_navis_2d_v1 <- df_navis_2d[-c(5,7)] 
 colnames(df_navis_2d_v1)[4] <- "acc_z"
@@ -323,13 +287,39 @@ df_gm <- func_gm(df_spacog_1, id, variable, time.f)
 df_gm <- reshape2::dcast(df_gm, id + task + time.f ~ variable, value.var = "value") 
 df_spacog_1 <- rbind(df_gm, df_spacog_1)
 
-# Compute hdt
-df_spacog_1_mean_hdt <- func_mean_hdt_spacog_1(df_spacog_1)
+# Add time.n
+df_spacog_1$time.n <- plyr::revalue(df_spacog_1$time.f, c("BDC-3" = "1", "HDT2" = "2", "HDT30" = "3", "HDT59" = "4", "R+12" = "5"))
+#df_cognition <- df_cognition[c(1:3, 34, 4:33)]
+df_spacog_1$time.n <- as.character((df_spacog_1$time.n))
+df_spacog_1$time.n <- as.numeric((df_spacog_1$time.n))
 
-# Compute change scores 
+
+# Compute mean hdt
+# Define vars for mean hdt
+id_vars <- c("id", "time.f", "time.n", "task")
+id_vars_merge <- c("id", "variable", "task") 
+time.n_bdc <- 1
+time.n_rec <- 5
+
+# Compute average baseline
+df_mean_bdc <- func_mean_bdc(df_spacog_1, id, variable, task)
+
+# Compute hdt
+df_mean_hdt <- func_mean_hdt(df_spacog_1, id, variable, task)
+
+# Rename columns
+names(df_mean_hdt)[4] <- "value_type"
+df_spacog_1_mean_hdt <- as_tibble(df_mean_hdt)
+
+# Define vars for change score
+id_vars <- c("id", "time.f", "time.n", "task")
 pre_changescore <- "BDC-3"
 post_changescore <- "HDT59"
-df_spacog_1_changescore <- func_changescore(df_spacog_1)
+
+# Run change scores
+df_spacog_1_changescore <- func_changescore(df_spacog_1, id, variable, task)
+
+#df_spacog_1_changescore <- reshape2::dcast(df_spacog_1_changescore, id + task + value_type ~ variable, value.var = "value")
 
 # Combine dfs
 df_spacog_1_sumstats <- rbind(df_spacog_1_mean_hdt, df_spacog_1_changescore)
@@ -374,6 +364,9 @@ df_spacog_2_sumstats <- rbind(df_gm, df_spacog_2)
 
 # Add id var for value type
 df_spacog_2_sumstats$value_type <- as.factor ( c( rep ("post", nrow(df_spacog_2_sumstats) ) ) )
+
+df_spacog_2_sumstats <- reshape2::melt(df_spacog_2_sumstats, 
+                              id.vars = c("id", "task", "value_type") )
 ```
 # Executive Control
 ```{r exe_ctrl}
@@ -387,14 +380,26 @@ df_gm <- func_gm(df_exe_ctrl, id, variable, time.f)
 df_gm <- reshape2::dcast(df_gm, id + task + time.f ~ variable, value.var = "value") 
 df_exe_ctrl <- rbind(df_gm, df_exe_ctrl)
 
+# Add time.n
+df_exe_ctrl$time.n <- plyr::revalue(df_exe_ctrl$time.f, c("BDC-6" = "1", "R+1" = "2"))
+df_exe_ctrl$time.n <- as.character((df_exe_ctrl$time.n))
+df_exe_ctrl$time.n <- as.numeric((df_exe_ctrl$time.n))
+
 # Compute change scores 
+
+# Define vars for change score
+id_vars <- c("id", "time.f", "time.n", "task")
 pre_changescore <- "BDC-6"
 post_changescore <- "R+1"
-df_exe_ctrl_changescore <- func_changescore(df_exe_ctrl)
+
+# Run change scores
+df_exe_ctrl_changescore <- func_changescore(df_exe_ctrl, id, variable, task)
 
 # df Post
 df_post <- subset(df_exe_ctrl, time.f == "R+1")
 df_post$value_type <- as.factor ( c( rep ("post", nrow(df_post) ) ) ) # Add id var for value type
+df_post <- reshape2::melt(df_post[-c(3,7)], 
+                              id.vars = c("id", "task", "value_type") )
 
 # Combine dfs
 df_exe_ctrl_sumstats <- rbind(df_exe_ctrl_changescore, df_post[-c(3)])
@@ -404,46 +409,75 @@ df_exe_ctrl_sumstats <- rbind(df_exe_ctrl_changescore, df_post[-c(3)])
 # Cognition
 ```{r cognition}
 # Convert to long
-df_tmp <- reshape2::melt(df_cognition, 
+df_cognition_tmp <- reshape2::melt(df_cognition, 
                               id.vars = c("id", "time.f", "time.n") )
 
 # Extract task and var names
-df_tmp$task <- df_tmp$variable
-df_tmp$task <- gsub("_.*","", df_tmp$task) # delete everthing after _
+df_cognition_tmp$task <- df_cognition_tmp$variable
+df_cognition_tmp$task <- gsub("_.*","", df_cognition_tmp$task) # delete everthing after _
 
-df_tmp$taskmeasure <- df_tmp$variable
-df_tmp$taskmeasure <- gsub("_z", "", df_tmp$taskmeasure) 
-df_tmp$taskmeasure <- gsub(".*_", "", df_tmp$taskmeasure) 
+df_cognition_tmp$taskmeasure <- df_cognition_tmp$variable
+df_cognition_tmp$taskmeasure <- gsub("_z", "", df_cognition_tmp$taskmeasure) 
+df_cognition_tmp$taskmeasure <- gsub(".*_", "", df_cognition_tmp$taskmeasure) 
 
 # relabel names
-df_tmp$taskmeasure<- revalue(df_tmp$taskmeasure, c("AvRT" = "rt_z", "pCorr" = "acc_z", "Eff" = "eff_z"))
+df_cognition_tmp$taskmeasure<- revalue(df_cognition_tmp$taskmeasure, c("AvRT" = "rt_z", "pCorr" = "acc_z", "Eff" = "eff_z"))
 
 # Convert data types
-df_tmp[c(6,7)] <- lapply(df_tmp[c(6,7)], as.factor)
+df_cognition_tmp[c(6,7)] <- lapply(df_cognition_tmp[c(6,7)], as.factor)
 
 # Clean
-df_tmp <- df_tmp[-c(4)]
+df_cognition_tmp <- df_cognition_tmp[-c(4)]
 
 # Rename columns
-names(df_tmp)[names(df_tmp) == "taskmeasure"] <- "variable"
+names(df_cognition_tmp)[names(df_cognition_tmp) == "taskmeasure"] <- "variable"
 
 # Convert 
-df_tmp <- reshape2::dcast(df_tmp, id + time.f + task ~ variable, value.var = "value") 
+df_cognition_tmp <- reshape2::dcast(df_cognition_tmp, id + time.f + time.n + task ~ variable, value.var = "value") 
 
 # Get Grand Means
 df_cognition_avr$task <- as.factor ( c( rep ("gm", nrow(df_cognition_avr) ) ) ) # Add id var for task
 
 # Combine
-df_tmp <- rbind(df_cognition_avr, df_tmp)
+df_cognition_tmp <- rbind(df_cognition_avr, df_cognition_tmp)
 
-df_cognition_hdt <- func_hdt_mean_cognition(df_tmp)
+# Compute mean hdt
+# Define vars for mean hdt
+id_vars <- c("id", "time.f", "time.n", "task")
+id_vars_merge <- c("id", "variable", "task") 
+time.n_bdc <- 3
+time.n_rec <- 11
+
+# Compute average baseline
+df_mean_bdc <- func_mean_bdc(df_cognition_tmp, id, variable, task)
+
+# Compute hdt
+df_mean_hdt <- func_mean_hdt(df_cognition_tmp, id, variable, task)
+
+# Rename columns
+names(df_mean_hdt)[4] <- "value_type"
+df_cognition_mean_hdt <- as_tibble(df_mean_hdt)
 
 # Compute change scores 
-df_cognition_changescore <- func_changescore_cognition(df_tmp)
+# Compute average bdc
+df_mean_bdc <- reshape2::dcast(df_mean_bdc, id + task ~ variable, value.var = "mean_bdc")
+df_mean_bdc$value_type <- as.factor ( c( rep ("BDC_av", nrow(df_mean_bdc) ) ) ) 
+names(df_mean_bdc)[names(df_mean_bdc) == "value_type"] <- "time.f"
+df_mean_bdc$time.n <- as.numeric ( c( rep ("1", nrow(df_mean_bdc) ) ) ) 
 
+# Add mean bdc to df
+df_cognition_tmp <- rbind(df_mean_bdc, df_cognition_tmp) 
+
+# Define vars for change score
+id_vars <- c("id", "time.f", "time.n", "task")
+pre_changescore <- "BDC_av"
+post_changescore <- "HDT57"
+
+# Run change scores
+df_cognition_changescore <- func_changescore(df_cognition_tmp, id, variable, task)
 
 # Combine dfs
-df_cognition_sumstats <- rbind(df_cognition_hdt, df_cognition_changescore)
+df_cognition_sumstats <- rbind(df_cognition_mean_hdt, df_cognition_changescore)
 ```
 
 # slopes Cognition
@@ -453,16 +487,16 @@ bdc <- 3  # BDC-9
 rec <- 11 # R+1
 
 # Create df with bdc as covariate
-df_tmp <- func_data_slope_cognition(df_cognition, id)
-names(df_tmp)
-dvList <- colnames(df_tmp)[c(38:65)]
+df_cognition_tmp <- func_data_slope_cognition(df_cognition, id)
+names(df_cognition_tmp)
+dvList <- colnames(df_cognition_tmp)[c(38:65)]
 
 ###run mixed models  
 mm_fac <-
    map(dvList, function(i) {
       lmerTest::lmer(paste0(i, "~pre_", i, "+ time.n + (time.n|id)"),
                            REML=T,
-                           data = df_tmp)
+                           data = df_cognition_tmp)
    })
 
 names(mm_fac) <- dvList #add names
@@ -501,8 +535,7 @@ names(df_cognition_slope)[names(df_cognition_slope) == "taskmeasure"] <- "variab
 df_cognition_slope <- df_cognition_slope[-c(2)]
 
 # Convert 
-df_cognition_slope <- reshape2::dcast(df_cognition_slope, id + task + value_type ~ variable, value.var = "value") 
-
+#df_cognition_slope <- reshape2::dcast(df_cognition_slope, id + task + value_type ~ variable, value.var = "value") 
 
 # Combine with 
 df_cognition_sumstats <- rbind(df_cognition_sumstats, df_cognition_slope)
@@ -556,8 +589,8 @@ df_slope <- reshape2::dcast(df_slope, id~variable)
 # Write to Excel File
 ```{r export}
 list_of_datasets <- list( 
-                          "Data Spatial Cognition 1 Int" = df_spacog_2_sumstats,
-                          "Data Spatial Cognition 2 Int" = df_spacog_1_sumstats,
+                          "Data Spatial Cognition 1 Int" = df_spacog_1_sumstats,
+                          "Data Spatial Cognition 2 Int" = df_spacog_2_sumstats,
                           "Data Executive Control Int" = df_exe_ctrl_sumstats,
                           "Data Cognition Int" = df_cognition_sumstats)
 write.xlsx(list_of_datasets, file = "./Data/Data Int Cog.xlsx", overwrite = TRUE)

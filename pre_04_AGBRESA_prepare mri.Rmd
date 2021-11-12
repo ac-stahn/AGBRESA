@@ -163,6 +163,23 @@ bdc <- quote( time.f == "BDC-3" )
 # Run z scores
 df_rsfrmi_cag_ctrl_z <- func_z(df_rsfrmi_cag_ctrl)
 df_rsfrmi_cag_ctrl_z <- as_tibble(df_rsfrmi_cag_ctrl_z)
+
+# Seed analyses left HC in iAG T1 vs T3
+# Read data
+df_rs_seed_l_HC_iAG_BDC_HDT59 <- read_excel("/Users/astahn/Publications/AGBRESA/Data/rsfMRI/SeedFC_AGBRESA_edAS.xlsx", sheet = "SeedLeftHC_T1T3_cont13_iAG")
+
+# Convert var type
+df_rs_seed_l_HC_iAG_BDC_HDT59[c(1:2)] <- lapply(df_rs_seed_l_HC_iAG_BDC_HDT59[c(1:2)], as.factor)
+df_rs_seed_l_HC_iAG_BDC_HDT59[c(3:4)] <- lapply(df_rs_seed_l_HC_iAG_BDC_HDT59[c(3:4)], as.numeric)
+colnames(df_rs_seed_l_HC_iAG_BDC_HDT59)[4] <- "mean FC_abs"
+
+# Define id vars for long format, and bdc data
+id_vars <- c("id", "time.f")
+bdc <- quote( time.f == "BDC-3" )
+
+# Run z scores
+df_rs_seed_l_HC_iAG_BDC_HDT59_z <- func_z(df_rs_seed_l_HC_iAG_BDC_HDT59)
+df_rs_seed_l_HC_iAG_BDC_HDT59_z <- as_tibble(df_rs_seed_l_HC_iAG_BDC_HDT59_z)
 ```
 # Load and Preprocess FSE LC Data
 ```{r FSE LC AGBRESA}
@@ -175,7 +192,10 @@ df_lc$ID <- gsub( "^.*ST", "", df_lc$ID ) # delete everything before ST
 
 # Clean
 names(df_lc) <- tolower(names(df_lc))
-        
+
+# Relabel id
+df_lc$id <- revalue(df_lc$id, c("Q" = "Q1", "R" = "R1", "S" = "S1"))
+
 # melt to long format
 df_lc <- reshape2::melt(df_lc, id.vars = "id") 
 
@@ -195,6 +215,7 @@ df_lc <- as_tibble(df_lc)
 
 # Convert to wide
 df_lc <- reshape2::dcast(df_lc, id + time.f ~ variable)
+df_lc <- df_lc[-c(4,5)]
 
 # Define id vars for long format, and bdc data
 id_vars <- c("id", "time.f")
@@ -217,6 +238,9 @@ df_vbm <- df_vbm[-c(2:4)]
 
 # Convert column names to lower case
 names(df_vbm) <- tolower(names(df_vbm))
+
+# Relabel id
+df_vbm$id <- revalue(df_vbm$id, c("Q" = "Q1", "R" = "R1", "S" = "S1"))
 
 # melt to long
 df_vbm <- reshape2::melt(df_vbm, id.vars = c("id"))
@@ -254,6 +278,25 @@ bdc <- quote( time.f == "BDC-3" )
 # Run z scores
 df_vbm_z <- func_z(df_vbm)
 df_vbm_z <- as_tibble(df_vbm_z)
+
+
+df_vbm_bdc_hdt59 <- read.csv("/Users/astahn/Publications/AGBRESA/Data/VBM/VBM BDC HDT 59/Pre_Post_BDC_HDT59_ROIs.csv", header = TRUE, sep = ",")
+
+colnames(df_vbm_bdc_hdt59)[1] <-  "id"
+colnames(df_vbm_bdc_hdt59)[2] <-  "time.f"
+df_vbm_bdc_hdt59$time.f <- gsub( "BDC-4", "BDC-3", df_vbm_bdc_hdt59$time.f )
+
+# Convert var type
+df_vbm_bdc_hdt59[c(1:2)] <- lapply(df_vbm_bdc_hdt59[c(1:2)], as.factor)
+df_vbm_bdc_hdt59 <- as_tibble(df_vbm_bdc_hdt59)
+
+# Define id vars for long format, and bdc data
+id_vars <- c("id", "time.f")
+bdc <- quote( time.f == "BDC-3" )
+
+# Run z scores
+df_vbm_bdc_hdt59_z <- func_z(df_vbm_bdc_hdt59)
+df_vbm_bdc_hdt59_z <- as_tibble(df_vbm_bdc_hdt59_z)
 ```
 # Load and Preprocess AGBRESA HC UPenn
 ```{r highres HC UPenn AGBRESA}
@@ -298,7 +341,7 @@ df_hc_rsl_and_ag_s1_upenn$ID <- gsub( "_.*$", "", df_hc_rsl_and_ag_s1_upenn$ID )
 df_hc_rsl_and_ag_s1_upenn <- df_hc_rsl_and_ag_s1_upenn[c(1,47,2:46)]
 
 # Relabel time.f
-df_hc_rsl_and_ag_s1_upenn$time.f <- revalue(df_hc_rsl_and_ag_s1_upenn$time.f, c("BDC4"="BDC-4", "R12"="R+12", "HDT"="HDT58", "BDC"="BDC-4"))
+df_hc_rsl_and_ag_s1_upenn$time.f <- revalue(df_hc_rsl_and_ag_s1_upenn$time.f, c("BDC4" = "BDC-3", "R12" = "R+12", "HDT" = "HDT58", "BDC" = "BDC-3"))
 
 # Extract RSL
 df_hc_rsl_upenn <- subset(df_hc_rsl_and_ag_s1_upenn, ID !="S1")
@@ -362,6 +405,15 @@ bdc <- quote( time.f == "BDC-3" )
 # Run z scores
 df_hc_ag_upenn_z <- func_z(df_hc_ag_upenn)
 df_hc_ag_upenn_z <- as_tibble(df_hc_ag_upenn_z)
+
+tmp <- reshape2::melt(df_hc_ag_upenn, id.vars = id_vars) 
+dat_bdc <- func_bdc(tmp)
+tmp <- merge(tmp, dat_bdc, by ="variable")
+tmp$z <- (tmp$value - tmp$mean_bdc) / tmp$sd_bdc
+tmp$variable <- paste(tmp$variable, "z", sep="_")
+tmp_id_var <- paste(id_vars, collapse = "+")
+id_vars_dep <- paste(tmp_id_var, "~ variable" )
+tmp <- reshape2::dcast(tmp[-c(4:6)], id_vars_dep, value.var = "z")
 ```
 # Load and Preprocess AGBRESA MPI
 ```{r highres HC MPI AGBRESA}
@@ -520,11 +572,11 @@ df_hc_rsl_upenn$sulcus <- df_hc_rsl_upenn$sulcus_left + df_hc_rsl_upenn$sulcus_r
 df_hc_rsl_upenn$hc_total <- df_hc_rsl_upenn$dg + df_hc_rsl_upenn$ca1 + df_hc_rsl_upenn$ca2 + df_hc_rsl_upenn$ca3 + df_hc_rsl_upenn$sub + df_hc_rsl_upenn$erc + df_hc_rsl_upenn$phc
 
 # Relabel time.f
-df_hc_rsl_upenn$time.f <- revalue(df_hc_rsl_upenn$time.f, c("BDC4"="BDC-4", "R12"="R+12", "HDT"="HDT58", "BDC"="BDC-4"))
+df_hc_rsl_upenn$time.f <- revalue(df_hc_rsl_upenn$time.f, c("BDC4" = "BDC-3", "R12" = "R+12", "HDT" = "HDT58", "BDC" = "BDC-3"))
 
 # Define id vars for long format, and bdc data
 id_vars <- c("id", "time.f")
-bdc <- quote( time.f == "BDC-4" )
+bdc <- quote( time.f == "BDC-3" )
 
 # Run z scores
 df_hc_rsl_upenn_z <- func_z(df_hc_rsl_upenn)
@@ -594,11 +646,11 @@ df_hc_rsl_mpi$erc <- df_hc_rsl_mpi$erc_left + df_hc_rsl_mpi$erc_right
 df_hc_rsl_mpi$hc_total <- df_hc_rsl_mpi$dg + df_hc_rsl_mpi$ca1 +  + df_hc_rsl_mpi$sub + df_hc_rsl_mpi$erc 
 
 # Relabel time.f
-df_hc_rsl_mpi$time.f <- revalue(df_hc_rsl_mpi$time.f, c("BDC4"="BDC-4", "R12"="R+12", "HDT"="HDT58", "BDC"="BDC-4"))
+df_hc_rsl_mpi$time.f <- revalue(df_hc_rsl_mpi$time.f, c("BDC4" = "BDC-3", "R12" = "R+12", "HDT" = "HDT58", "BDC" = "BDC-3"))
 
 # Define id vars for long format, and bdc data
 id_vars <- c("id", "time.f")
-bdc <- quote( time.f == "BDC-4" )
+bdc <- quote( time.f == "BDC-3" )
 
 # Run z scores
 df_hc_rsl_mpi_z <- func_z(df_hc_rsl_mpi)
@@ -752,6 +804,16 @@ df_mtr <- read.csv("/Users/astahn/Publications/AGBRESA/Data/MTR/MT_ROis_ed.csv",
 df_mtr[c(1:2)] <- lapply(df_mtr[c(1:2)], as.factor)
 df_mtr <- as_tibble(df_mtr)
 
+names(df_mtr)[names(df_mtr) == "left_amyg"] <- "mtr_amyg_left"
+names(df_mtr)[names(df_mtr) == "right_amyg"] <- "mtr_amyg_right"
+names(df_mtr)[names(df_mtr) == "left_latfront"] <- "mtr_latfront_left"
+names(df_mtr)[names(df_mtr) == "right_latfront"] <- "mtr_latfront_right"
+names(df_mtr)[names(df_mtr) == "left_hippo"] <- "mtr_hc_left"
+names(df_mtr)[names(df_mtr) == "right_hippo"] <- "mtr_hc_right"
+
+# Relabel id
+df_mtr$id <- revalue(df_vbm$id, c("Q" = "Q1", "R" = "R1", "S" = "S1"))
+
 # Define id vars for long format, and bdc data
 id_vars <- c("id", "time.f")
 bdc <- quote( time.f == "BDC-3" )
@@ -759,6 +821,40 @@ bdc <- quote( time.f == "BDC-3" )
 # Run z scores
 df_mtr_z <- func_z(df_mtr)
 df_mtr_z <- as_tibble(df_mtr_z)
+df_mtr_z[c(3:8)] <- lapply(df_mtr_z[c(3:8)], as.numeric)
+```
+# Load and Preprocess fmri Task Pattern Separation
+```{r fmri pattern sep}
+# Read data 
+df_patsep <-read.csv("/Users/astahn/Publications/AGBRESA/Data/Pattern Separation/mbar_AGBRESA.csv", header = TRUE, sep = ",")
+
+# Clean
+df_patsep <- df_patsep[c(1:8,12,9:11)] # Reorder vars
+names(df_patsep)[names(df_patsep)=="Phase"] <- "time.f" # Change names
+names(df_patsep)[names(df_patsep)=="hipp"] <- "hc" # Change names
+names(df_patsep)[names(df_patsep)=="ph"] <- "phc" # Change names
+
+names(df_patsep) <- tolower(names(df_patsep))
+df_patsep <- df_patsep[-c(3:7)]
+
+# Relabel time.f
+df_patsep$time.f <- revalue(df_patsep$time.f, c("BDC" = "BDC-3", "HDT" = "HDT59"))
+df_patsep <- as_tibble(df_patsep)
+
+# Convert data type
+df_patsep[(1:4)] <- lapply(df_patsep[(1:4)], as.factor)
+
+# Rearrange
+df_patsep_tmp <- reshape2::melt(df_patsep, id.vars = c("id", "time.f", "side", "type"))
+df_patsep <- reshape2::dcast(df_patsep_tmp, id + time.f + type ~ variable + side)
+
+# Define id vars for long format, and bdc data
+id_vars <- c("id", "time.f", "type")
+bdc <- quote( time.f == "BDC-3" )
+
+# Run z scores
+df_patsep_z <- func_z(df_patsep)
+df_patsep_z <- as_tibble(df_patsep_z)
 ```
 # Save data
 ```{r export data}
@@ -768,15 +864,21 @@ list_of_datasets <- list(   "rsfrmi AGvCTRL_BDC_HDT59" = df_rsfrmi_ag_ctrl,
                             "rsfrmi AGvCTRL_BDC_HDT59 z" = df_rsfrmi_ag_ctrl_z,
                             "rsfrmi cAGvsCTRL_BDC_HDT59 z" = df_rsfrmi_cag_ctrl_z,
                             "VBM" = df_vbm,
-                            "VBM z scores" = df_vbm_z,
+                            "VBM z" = df_vbm_z,
+                            "VBM_bdc_hft59" = df_vbm_bdc_hdt59,
+                            "VBM_bdc_hft59 z" = df_vbm_bdc_hdt59_z,
                             "High Res LC" = df_lc,
                             "High Res LC z" = df_lc_z,
                             "MTR" = df_mtr,
-                            "MTR z scores" = df_mtr_z,
+                            "MTR z" = df_mtr_z,
                             "HC UPenn" = df_hc_ag_upenn,
                             "HC UPenn z" = df_hc_ag_upenn_z,
                             "HC MPI" = df_hc_ag_mpi,
-                            "HC MPI z" = df_hc_ag_mpi_z)
+                            "HC MPI z" = df_hc_ag_mpi_z,
+                            "task fmri PatSep" = df_patsep,
+                            "task fmri PatSep z" = df_patsep_z,
+                            "rsfmri Seed l_HC BDC_HDT59" = df_rs_seed_l_HC_iAG_BDC_HDT59,
+                            "rsfmri Seed l_HC BDC_HDT59 z" = df_rs_seed_l_HC_iAG_BDC_HDT59_z)
 
 write.xlsx(list_of_datasets, file = "./Data/Data MRI.xlsx", overwrite = TRUE)
 

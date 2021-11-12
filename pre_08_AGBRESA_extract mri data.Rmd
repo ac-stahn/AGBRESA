@@ -1,0 +1,319 @@
+---
+title: "AGBRESA Extract MRI Data"
+author: "A Stahn"
+date: "11/08/2021"
+output: html_document
+---
+```{r include = FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+# Prepare Script
+## Required Packages
+```{r load required packages, message = FALSE}
+library(knitr) # for kable
+library(readxl) # read xls
+library(openxlsx) # save tables
+library(reshape2) # wide to long
+library(plyr) # ldply
+library(tidyverse) # for fct_relevel
+
+library(lme4) # for adding mixed model functions to plot
+library(lmerTest) # for adding mixed model functions to plot
+library(qdapTools) # list_df2df(tbl_mm_fac_aov)
+```
+## Print Session Info
+```{r print R and package versions}
+print(sessionInfo())
+```
+## Load Data
+```{r load data}
+# Demographics
+df_demo <- read_excel("./Data/Data Demographics.xlsx",sheet = "Data Demo")
+df_demo[c(1:5)] <- lapply(df_demo[c(1:5)], as.factor)
+
+# vbm
+df_vbm <- read_excel("./Data/Data MRI.xlsx", sheet = "VBM z")
+df_vbm[c(1:2)] <- lapply(df_vbm[c(1:2)], as.factor)
+
+df_vbm_bdc_hdt59 <- read_excel("./Data/Data MRI.xlsx", sheet = "VBM_bdc_hft59 z")
+df_vbm_bdc_hdt59[c(1:2)] <- lapply(df_vbm_bdc_hdt59[c(1:2)], as.factor)
+
+# hc
+df_hc <- read_excel("./Data/Data MRI.xlsx", sheet = "HC UPenn z")
+df_hc[c(1:2)] <- lapply(df_hc[c(1:2)], as.factor)
+
+# mtr
+df_mtr <- read_excel("./Data/Data MRI.xlsx", sheet = "MTR z")
+df_mtr[c(1:2)] <- lapply(df_mtr[c(1:2)], as.factor)
+
+# lc
+df_lc <- read_excel("./Data/Data MRI.xlsx", sheet = "High Res LC z")
+df_lc[c(1:2)] <- lapply(df_lc[c(1:2)], as.factor)
+
+# rsfrmi AGvCTRL_BDC_HDT59
+df_rsfrmi_AGvCTRL_BDC_HDT59 <- read_excel("./Data/Data MRI.xlsx", sheet = "rsfrmi AGvCTRL_BDC_HDT59 z")
+df_rsfrmi_AGvCTRL_BDC_HDT59[c(1:2)] <- lapply(df_rsfrmi_AGvCTRL_BDC_HDT59[c(1:2)], as.factor)
+
+# rsfrmi cAGvsCTRL_BDC_HDT59
+df_rsfrmi_cAGvsCTRL_BDC_HDT59 <- read_excel("./Data/Data MRI.xlsx", sheet = "rsfrmi cAGvsCTRL_BDC_HDT59 z")
+df_rsfrmi_cAGvsCTRL_BDC_HDT59[c(1:2)] <- lapply(df_rsfrmi_cAGvsCTRL_BDC_HDT59[c(1:2)], as.factor)
+
+# rsfrmi Seed
+df_rsfrmi_l_iAG_hc_bdc_hdt59 <- read_excel("./Data/Data MRI.xlsx", sheet = "rsfmri Seed l_HC BDC_HDT59 z")
+df_rsfrmi_l_iAG_hc_bdc_hdt59[c(1:2)] <- lapply(df_rsfrmi_l_iAG_hc_bdc_hdt59[c(1:2)], as.factor)
+
+# task frmi Pattern Separation
+df_patsep <- read_excel("./Data/Data MRI.xlsx", sheet = "task fmri PatSep z")
+df_patsep[c(1:3)] <- lapply(df_patsep[c(1:3)], as.factor)
+names(df_patsep)[names(df_patsep) == "type"] <- "cond.f"
+```
+# Function summary stats
+```{r summary functions}
+# Function mean bdc
+func_mean_bdc <- function(data,...) {
+  
+  df_tmp <- reshape2::melt(data, 
+                              id.vars = id_vars ) %>%
+    droplevels()
+  
+  df_mean_bdc <- df_tmp %>%
+    
+    filter(time.n < (time.n_bdc + 1) )
+  
+  groups <- enquos(...)
+  
+  df_mean_bdc <- df_mean_bdc %>%
+    
+    group_by(!!!groups) %>%
+    
+    dplyr::summarise(
+      mean_bdc = mean(value, na.rm = T)
+    )
+  return(df_mean_bdc)
+}
+
+# Function mean hdt
+func_mean_hdt <- function(data,...) {
+  
+  df_mean_hdt <- reshape2::melt(data, 
+                              id.vars = id_vars ) %>%
+    droplevels()
+  
+  df_mean_hdt <- df_mean_hdt %>%
+    
+    filter(time.n > time.n_bdc & time.n < time.n_rec)
+    
+    groups <- enquos(...)
+  
+  df_mean_hdt <- df_mean_hdt %>%
+  
+    group_by(!!!groups) %>%
+    #group_by(id, variable, task) %>%
+    
+    dplyr::summarise(
+      mean_hdt = mean(value, na.rm = T)
+    )
+  df_mean_hdt <- merge( df_mean_hdt, df_mean_bdc, by = c(id_vars_merge) )
+  df_mean_hdt$hdt_mean_bdc_adj <- df_mean_hdt$mean_hdt - df_mean_hdt$mean_bdc
+  df_mean_hdt <- df_mean_hdt[-c(4)]
+  df_mean_hdt <- reshape2::melt(df_mean_hdt, 
+                              id.vars = c(id_vars_merge) )
+  return(df_mean_hdt)
+}
+
+# Compute change scores 
+func_changescore <- function(data,...) {
+  
+  df_tmp <- reshape2::melt(data, 
+                              id.vars = id_vars ) 
+ 
+  #df_changescore <- subset(df_tmp, time.f == pre_changescore | time.f == post_changescore)
+  #df_changescore <- droplevels(df_changescore) 
+
+  groups <- enquos(...)
+  
+  df_changescore <- df_tmp %>%
+  
+    group_by(!!!groups) %>%
+  
+    #group_by(id, variable, task) %>%
+    dplyr::summarise(
+      value = value[time.f == post_changescore] - value[time.f == pre_changescore])
+  df_changescore$value_type <- as.factor ( c( rep ("change_score", nrow(df_changescore) ) ) ) # Add id var for task
+
+  return(df_changescore)
+}
+```
+# Structural MRI
+```{r structural mri}
+# Combine data 
+df_tmp <- merge(df_hc, df_mtr, by = c("id", "time.f") )
+df_tmp <- merge(df_tmp, df_lc, by = c("id", "time.f") )
+df_tmp <- merge(df_tmp, df_vbm, by = c("id", "time.f") )
+df_mri <- merge(df_tmp, df_vbm_bdc_hdt59, by = c("id", "time.f") )
+
+# Relabel time.f
+df_mri$time.n <- revalue(df_mri$time.f, c("BDC-3" = "1", "HDT30" = "2", "HDT59" = "3", "R+11" = "4"))
+df_mri$time.n <- as.numeric(df_mri$time.n)
+df_mri <- as_tibble(df_mri)
+
+# Compute mean hdt
+# Define vars for mean hdt
+id_vars <- c("id", "time.f", "time.n") 
+
+id_vars_merge <- c("id", "variable") 
+time.n_bdc <- 1
+time.n_rec <- 4
+
+# Compute average baseline
+df_mean_bdc <- func_mean_bdc(df_mri, id, variable)
+
+# Compute hdt
+df_mean_hdt <- func_mean_hdt(df_mri, id, variable)
+
+# Rename columns
+names(df_mean_hdt)[3] <- "value_type"
+df_mri_mean_hdt <- as_tibble(df_mean_hdt)
+
+# Compute change scores
+# Define vars for mean hdt
+pre_changescore <- "BDC-3"
+post_changescore <- "HDT59"
+
+# Run change scores
+df_mri_changescore <- func_changescore(df_mri, id, variable)
+
+# Post 
+df_mri_post <- subset(df_mri, time.f == "HDT59")
+df_mri_post <- melt(df_mri_post, id.vars = c("id", "time.f", "time.n"))
+df_mri_post$value_type <- as.factor ( c( rep ("post", nrow(df_mri_post) ) ) ) # Add id var for task
+df_mri_post <- df_mri_post[-c(2,3)]
+
+# Combine dfs
+df_mri_struc_sumstats <- rbind(df_mri_mean_hdt, df_mri_changescore, as_tibble(df_mri_post) )
+```
+# Functional MRI
+```{r fmri}
+# Combine data 
+# Select data
+df_rsfrmi_AGvCTRL_BDC_HDT59_tmp <- df_rsfrmi_AGvCTRL_BDC_HDT59[c(1,2,5)]
+df_rsfrmi_AGvCTRL_BDC_HDT59_tmp$variable <- rep( "AGvCTRL_BDC_HDT59_z", nrow(df_rsfrmi_AGvCTRL_BDC_HDT59_tmp) )
+colnames(df_rsfrmi_AGvCTRL_BDC_HDT59_tmp)[3] <- "value"
+
+df_rsfrmi_cAGvsCTRL_BDC_HDT59_tmp <- df_rsfrmi_cAGvsCTRL_BDC_HDT59[c(1,2,5)]
+df_rsfrmi_cAGvsCTRL_BDC_HDT59_tmp$variable <- rep( "cAGvCTRL_BDC_HDT59_z", nrow(df_rsfrmi_cAGvsCTRL_BDC_HDT59_tmp) )
+colnames(df_rsfrmi_cAGvsCTRL_BDC_HDT59_tmp)[3] <- "value"
+
+df_rsfrmi_l_iAG_hc_bdc_hdt59_tmp <- df_rsfrmi_l_iAG_hc_bdc_hdt59[c(1,2,3)]
+df_rsfrmi_l_iAG_hc_bdc_hdt59_tmp$variable <- rep( "iAG_l_hc_BDC_HDT59_z", nrow(df_rsfrmi_l_iAG_hc_bdc_hdt59_tmp) )
+colnames(df_rsfrmi_l_iAG_hc_bdc_hdt59_tmp)[3] <- "value"
+
+df_rsfrmi <- rbind(df_rsfrmi_AGvCTRL_BDC_HDT59_tmp, df_rsfrmi_cAGvsCTRL_BDC_HDT59_tmp, df_rsfrmi_l_iAG_hc_bdc_hdt59_tmp)
+df_rsfrmi[c(4)] <- lapply(df_rsfrmi[c(4)], as.factor)
+
+
+
+df_patsep <- melt(df_patsep, id = c("id", "time.f", "cond.f")) 
+df_patsep <- dcast(df_patsep, id + time.f ~ cond.f + variable, value.var="value")
+
+df_patsep <- melt(df_patsep, vars.id = c("id", "time.f"))
+df_patsep <- as_tibble(df_patsep)
+
+# Combine dfs
+df_fmri <- rbind(df_rsfrmi, df_patsep)
+
+# Relabel time.f
+df_fmri$time.n <- revalue(df_fmri$time.f, c("BDC-3" = "1", "HDT59" = "2"))
+df_fmri$time.n <- as.numeric(df_fmri$time.n)
+df_fmri <- as_tibble(df_fmri)
+df_fmri[c(4)] <- lapply(df_fmri[c(4)], as.factor)
+
+
+# Define vars for mean hdt
+id_vars <- c("id", "time.f", "time.n") 
+
+id_vars_merge <- c("id", "variable") 
+time.n_bdc <- 1
+time.n_rec <- 2
+
+# Compute average baseline
+func_mean_bdc <- function(data, ...) {
+ #df_tmp <- reshape2::melt(data, 
+#                              id.vars = id_vars ) %>%
+ #   droplevels()
+  
+  df_mean_bdc <- data %>%
+    
+    filter(time.n < (time.n_bdc + 1) )
+  
+  groups <- (enquos(...))
+  
+  df_mean_bdc <- df_mean_bdc %>%
+    
+    group_by(!!!groups) %>%
+    
+    dplyr::summarise(
+      mean_bdc = mean(value, na.rm = T)
+    )
+  return(df_mean_bdc)
+}
+  
+df_mean_bdc <- func_mean_bdc(df_fmri, id, variable)
+
+# Compute mean hdt
+df_fmri_mean_hdt <- func_mean_hdt(df_fmri, id, variable)
+
+# Rename columns
+names(df_fmri_mean_hdt)[3] <- "value_type"
+df_fmri_mean_hdt <- as_tibble(df_fmri_mean_hdt)
+
+# Compute change scores
+
+
+func_changescore <- function(data,...) {
+  
+  groups <- enquos(...)
+  
+  df_changescore <- data %>%
+  
+    group_by(!!!groups) %>%
+  
+    #group_by(id, variable, task) %>%
+    dplyr::summarise(
+      value = value[time.f == post_changescore] - value[time.f == pre_changescore])
+  df_changescore$value_type <- as.factor ( c( rep ("change_score", nrow(df_changescore) ) ) ) # Add id var for task
+
+  return(df_changescore)
+}
+
+# Define vars for mean hdt
+pre_changescore <- "BDC-3"
+post_changescore <- "HDT59"
+
+# Run Change Scores
+df_fmri_changescore <- func_changescore(df_fmri, id, variable)
+
+# Post 
+df_fmri_post <- subset(df_fmri, time.f == "HDT59")
+
+#df_fmri_post <- melt(df_fmri_post, id.vars = c("id", "time.f", "time.n"))
+df_fmri_post$value_type <- as.factor ( c( rep ("post", nrow(df_fmri_post) ) ) ) # Add id var for task
+df_fmri_post <- df_fmri_post[-c(2,5)]
+
+# Combine dfs
+df_mri_func_sumstats <- rbind(df_fmri_mean_hdt, df_fmri_changescore, df_fmri_post)
+df_mri_func_sumstats[c(3)] <- lapply(df_mri_func_sumstats[c(3)], as.numeric)
+```
+
+# Write to Excel File
+```{r export}
+list_of_datasets <- list( "Data MRI Func Int" = df_mri_func_sumstats,
+                          "Data MRI Struc Int" = df_mri_struc_sumstats)
+write.xlsx(list_of_datasets, file = "./Data/Data Int MRI.xlsx", overwrite = TRUE)
+```
+
+
+
+
+
